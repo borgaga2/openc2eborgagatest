@@ -10,6 +10,7 @@
 #include <SDL3_mixer/SDL_mixer.h>
 #include <SDL3_native_midi/SDL_native_midi.h>
 #include <filesystem>
+#include <memory>
 #include <mutex>
 
 namespace fs = std::filesystem;
@@ -28,7 +29,7 @@ using NativeMidiSongDeleter = deleter<NativeMidi_Song, NativeMidi_DestroySong>;
 using SDLFreeDeleter = deleter<void, SDL_free>;
 
 struct ChannelInfo {
-	std::unique_ptr<MIX_Track, MIXTrackDeleter> track;
+	std::shared_ptr<MIX_Track> track;
 };
 
 static std::mutex s_channels_mutex;
@@ -38,14 +39,18 @@ static std::unique_ptr<MIX_Mixer, MIXMixerDeleter> s_mixer;
 
 template <typename F>
 static void audio_channel_to_track(AudioChannel source, F&& f) {
-	std::lock_guard<std::mutex> lock(s_channels_mutex);
-	ChannelInfo* channel_p = s_channels.try_get(SlotMapKey::from_integral(source.handle));
-	if (!channel_p) {
-		return;
+	std::shared_ptr<MIX_Track> track;
+	{
+		std::lock_guard<std::mutex> lock(s_channels_mutex);
+		if (auto* channel = s_channels.try_get(SlotMapKey::from_integral(source.handle))) {
+			track = channel->track;
+		}
 	}
-	// Hold lock while callback is using MIX_Track pointer, so it doesn't get destroyed
-	// out from under us.
-	f(channel_p->track.get());
+	// SDL invokes stopped callbacks while holding its mixer lock. Pin the
+	// lifetime, then release our mutex before entering SDL to avoid lock inversion.
+	if (track) {
+		f(track.get());
+	}
 }
 
 static AudioChannel track_to_audio_channel(std::unique_ptr<MIX_Track, MIXTrackDeleter>&& track) {
@@ -56,14 +61,21 @@ static AudioChannel track_to_audio_channel(std::unique_ptr<MIX_Track, MIXTrackDe
 	SlotMapKey key;
 	{
 		std::lock_guard<std::mutex> lock(s_channels_mutex);
-		key = s_channels.insert(ChannelInfo{std::move(track)});
+		key = s_channels.insert(ChannelInfo{std::shared_ptr<MIX_Track>(std::move(track))});
 	}
 
 	MIX_SetTrackStoppedCallback(
 		trackp, [](void* key_, MIX_Track*) {
 			auto key = SlotMapKey::from_integral(numeric_cast<KeyIntegerType>(reinterpret_cast<uintptr_t>(key_)));
-			std::lock_guard<std::mutex> lock(s_channels_mutex);
-			s_channels.erase(key);
+			std::shared_ptr<MIX_Track> stopped_track;
+			{
+				std::lock_guard<std::mutex> lock(s_channels_mutex);
+				if (auto* channel = s_channels.try_get(key)) {
+					stopped_track = std::move(channel->track);
+					s_channels.erase(key);
+				}
+			}
+			// Track destruction also enters SDL, so it must happen outside our lock.
 		},
 		reinterpret_cast<void*>(numeric_cast<uintptr_t>(key.to_integral())));
 
@@ -143,10 +155,13 @@ void SDLMixerBackend::init() {
 }
 
 void SDLMixerBackend::shutdown() {
+	DenseSlotMap<ChannelInfo> channels;
 	{
 		std::lock_guard<std::mutex> lock(s_channels_mutex);
+		channels = std::move(s_channels);
 		s_channels = {};
 	}
+	channels = {};
 	s_mixer.reset();
 	MIX_Quit();
 
@@ -235,7 +250,6 @@ static AudioChannel play_sdl_io(const std::string& name, const std::string& shor
 		MIX_SetTrackLoops(track.get(), -1);
 	}
 
-	MIX_Track* trackp = track.get();
 	auto channel = track_to_audio_channel(std::move(track));
 
 	// set initial panning, which will reduce volume a bit
@@ -243,7 +257,9 @@ static AudioChannel play_sdl_io(const std::string& name, const std::string& shor
 	audio_channel_set_pan(channel, 0.0f);
 
 	// now start the track
-	MIX_PlayTrack(trackp, 0);
+	audio_channel_to_track(channel, [](auto* playing_track) {
+		MIX_PlayTrack(playing_track, 0);
+	});
 
 	fmt::print("INFO [SDLMixer] Playing {} format={}/{}Hz/{}{}\n", shortname, spec.channels, spec.freq, sdl_audioformat_to_string(spec.format), looping ? " looping=true" : "");
 

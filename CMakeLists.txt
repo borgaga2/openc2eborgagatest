@@ -387,6 +387,9 @@ if (WIN32)
 	target_link_libraries(test_openc2e ws2_32 dbghelp)
 endif()
 
+add_executable(test_sdlmixer src/sdlbackend/SDLMixerBackendTest.cpp)
+target_link_libraries(test_sdlmixer openc2e_core openc2e_sdlbackend gtest_main)
+
 add_library(opencreatures1_core STATIC
 	src/opencreatures1/Biochemistry.cpp
 	src/opencreatures1/C1MusicManager.cpp
@@ -446,6 +449,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(test_opencreatures1 BEFORE PRIVATE -Wconversion -Wsign-conversion -Wsign-compare)
 endif()
 target_link_libraries(test_opencreatures1 opencreatures1_core gtest_main)
+
+add_executable(c2playcheck src/tools/c2playcheck.cpp)
+target_include_directories(c2playcheck PRIVATE src/openc2e)
+target_link_libraries(c2playcheck openc2e_core openc2e_sdlbackend)
 
 add_executable(attparser src/tools/attparser.cpp)
 target_link_libraries(attparser openc2e-fileformats)
@@ -522,6 +529,8 @@ gtest_discover_tests(test_openc2e DISCOVERY_TIMEOUT 30)
 gtest_discover_tests(test_opencreatures1 DISCOVERY_TIMEOUT 30)
 gtest_discover_tests(test_common DISCOVERY_TIMEOUT 30)
 gtest_discover_tests(test_fileformats DISCOVERY_TIMEOUT 30)
+gtest_discover_tests(test_sdlmixer DISCOVERY_TIMEOUT 30
+	PROPERTIES TIMEOUT 30 ENVIRONMENT "SDL_AUDIODRIVER=dummy")
 
 # Generated files
 get_target_property(CAOSVM_FILES openc2e_core SOURCES)

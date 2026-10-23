@@ -96,6 +96,17 @@ You should provide a path to a game's data files with the `-d` or `--data-path` 
 
 The engine will try to guess the game based on files in the directory. If it can't decide, it will default to C3/DS.
 
+### Creatures 2 gameplay check
+
+An optional integration check uses your installed C2 assets to create a newborn Norn and advance the real world for 1,200 ticks with a null renderer:
+
+```bash
+cmake --build build --target c2playcheck
+./build/c2playcheck /path/to/Creatures2
+```
+
+It checks birth registration, survival, age advancement, and brain updates. It does not verify the hatchery UI or saving and resuming a world. To run without an audio device, set the `SDL_AUDIODRIVER` environment variable to `dummy`.
+
 ## Advanced Usage
 
 To see an overview of all available options, use `-h` / `--help`:

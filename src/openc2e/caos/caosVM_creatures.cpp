@@ -1255,6 +1255,10 @@ void c_NEW_CREA_c1(caosVM* vm) {
 	world.newMoniker(genome, realmoniker, a);
 	world.history->getMoniker(world.history->findMoniker(genome)).moveToCreature(a);
 
+	// Legacy NEW: CREA creates a newborn directly. C1/C2 do not expose the
+	// later BORN command, so birth registration and age ticking start here.
+	c->born();
+
 	vm->setTarg(a);
 }
 
