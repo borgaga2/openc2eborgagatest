@@ -294,6 +294,7 @@ class Agent : public std::enable_shared_from_this<Agent> {
 	virtual unsigned int getZOrder() const;
 
 	class std::shared_ptr<script> findScript(unsigned short event);
+	int getLastScript() const { return lastScript; }
 
 	int getUNID() const;
 	std::string identify() const;
@@ -340,3 +341,4 @@ class LifeAssert {
 
 #endif
 /* vim: set noet: */
+
