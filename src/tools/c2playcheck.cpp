@@ -108,6 +108,28 @@ int main(int argc, char** argv) {
 		auto room = world.map->getRoom(16);
 		if (!room)
 			throw Exception("Missing the stock C2 incubator room");
+		const unsigned int test_ca = CA_COUNT - 1;
+		const auto rate_set = world.carates.find(room->type);
+		const bool had_previous_rate = rate_set != world.carates.end() && rate_set->second.find(test_ca) != rate_set->second.end();
+		const cainfo previous_rate = had_previous_rate ? rate_set->second.at(test_ca) : cainfo{};
+		const float previous_ca = room->ca[test_ca];
+		const float previous_catemp = room->catemp[test_ca];
+		world.carates[room->type][test_ca] = cainfo{0.0f, 0.5f, 0.0f};
+		room->ca[test_ca] = 0.5f;
+		room->catemp[test_ca] = 0.0f;
+		world.map->tick();
+		const float decayed_ca = room->ca[test_ca];
+		room->ca[test_ca] = previous_ca;
+		room->catemp[test_ca] = previous_catemp;
+		if (had_previous_rate)
+			world.carates[room->type][test_ca] = previous_rate;
+		else {
+			world.carates[room->type].erase(test_ca);
+			if (world.carates[room->type].empty())
+				world.carates.erase(room->type);
+		}
+		if (decayed_ca < 0.249f || decayed_ca > 0.251f)
+			throw Exception(fmt::format("C2 room CA tick produced {}, expected 0.25", decayed_ca));
 		const int x = static_cast<int>((room->x_left + room->x_right) / 2);
 		const int y = static_cast<int>(room->floorYatX(static_cast<float>(x))) - 150;
 		auto result = engine.executeNetwork(fmt::format(

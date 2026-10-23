@@ -120,9 +120,6 @@ unsigned int Map::getRoomCount() {
 }
 
 void Map::tick() {
-	if (engine.version < 3)
-		return; // TODO: tick rooms in C2
-
 	// Three passes..
 	for (auto& metaroom : metarooms)
 		for (auto& r : metaroom->rooms)
