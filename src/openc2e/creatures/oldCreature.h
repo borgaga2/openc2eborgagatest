@@ -237,6 +237,12 @@ class c2Creature : public oldCreature {
 		return drives[id];
 	}
 
+	unsigned int noOrgans() { return organs.size(); }
+	std::shared_ptr<c2Organ> getOrgan(unsigned int i) {
+		assert(i < organs.size());
+		return organs[i];
+	}
+
 	unsigned char* getLocusPointer(bool receptor, unsigned char o, unsigned char t, unsigned char l);
 
 	unsigned int getGait();

@@ -30,6 +30,7 @@
 #include "creatures/oldCreature.h"
 #include "historyManager.h"
 
+#include <algorithm>
 #include <cassert>
 #include <memory>
 
@@ -61,6 +62,16 @@ c2eCreature* getc2eCreature(Agent* a) {
 	if (!b)
 		return 0;
 	c2eCreature* c = dynamic_cast<c2eCreature*>(b->getCreature());
+	return c;
+}
+
+c2Creature* getC2Creature(Agent* a) {
+	if (!a)
+		return 0;
+	CreatureAgent* b = dynamic_cast<CreatureAgent*>(a);
+	if (!b)
+		return 0;
+	c2Creature* c = dynamic_cast<c2Creature*>(b->getCreature());
 	return c;
 }
 
@@ -1434,7 +1445,12 @@ void v_TAGE(caosVM* vm) {
  Return the number of organs the target creature has.
 */
 void v_ORGN(caosVM* vm) {
-	c2eCreature* c = getc2eCreature(vm->targ.get());
+	Creature* creature = vm->getTargCreature();
+	if (c2eCreature* c = dynamic_cast<c2eCreature*>(creature)) {
+		vm->result.setInt(c->noOrgans());
+		return;
+	}
+	c2Creature* c = dynamic_cast<c2Creature*>(creature);
 	THROW_IFNOT(c);
 	vm->result.setInt(c->noOrgans());
 }
@@ -1463,10 +1479,33 @@ void v_ORGF(caosVM* vm) {
 	VM_PARAM_INTEGER(value)
 	VM_PARAM_INTEGER(organ)
 
-	c2eCreature* c = getc2eCreature(vm->targ.get());
-	THROW_IFNOT(c);
-	if (organ < 0 || (unsigned int)organ >= c->noOrgans()) {
+	Creature* creature = vm->getTargCreature();
+	c2eCreature* c = dynamic_cast<c2eCreature*>(creature);
+	c2Creature* legacy = dynamic_cast<c2Creature*>(creature);
+	unsigned int organ_count = c ? c->noOrgans() : (legacy ? legacy->noOrgans() : 0);
+	THROW_IFNOT(c || legacy);
+	if (organ < 0 || (unsigned int)organ >= organ_count) {
 		vm->result.setFloat(-1.0f);
+		return;
+	}
+
+	if (legacy) {
+		std::shared_ptr<c2Organ> o = legacy->getOrgan(organ);
+		switch (value) {
+			case 0: vm->result.setFloat(o->getClockRate()); break;
+			case 1:
+				vm->result.setFloat(o->getInitialLifeforce() > 0.0f ? o->getShortTermLifeforce() / o->getInitialLifeforce() : 0.0f);
+				break;
+			case 2: vm->result.setFloat(o->getRepairRate()); break;
+			case 3: vm->result.setFloat(o->getInjuryToApply()); break;
+			case 4: vm->result.setFloat(o->getInitialLifeforce()); break;
+			case 5: vm->result.setFloat(o->getShortTermLifeforce()); break;
+			case 6: vm->result.setFloat(o->getLongTermLifeforce()); break;
+			case 7: vm->result.setFloat(o->getDamageRate()); break;
+			case 8: vm->result.setFloat(o->getEnergyCost()); break;
+			case 9: vm->result.setFloat(o->getATPDamageCoefficient()); break;
+			default: vm->result.setFloat(-1.0f); break;
+		}
 		return;
 	}
 
@@ -1766,11 +1805,20 @@ void c_TNTC(caosVM* vm) {
  %variants c2
 */
 void c_INJR(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(amount)
-	VM_PARAM_INTEGER_UNUSED(organ)
+	VM_PARAM_INTEGER(amount)
+	VM_PARAM_INTEGER(organ)
 
 	valid_agent(vm->targ);
-	// TODO
+	c2Creature* creature = getC2Creature(vm->targ.get());
+	THROW_IFNOT(creature);
+	if (organ < 0 || (unsigned int)organ >= creature->noOrgans())
+		return;
+
+	std::shared_ptr<c2Organ> target = creature->getOrgan(organ);
+	// INJR's amount is 0..255, with 255 representing one tenth of the organ's
+	// initial life force.
+	float scaled_amount = std::max(0, std::min(255, amount)) * target->getInitialLifeforce() / 2550.0f;
+	target->applyInjury(scaled_amount);
 }
 
 /**
