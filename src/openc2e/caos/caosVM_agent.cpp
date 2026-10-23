@@ -1376,13 +1376,17 @@ void c_HAND(caosVM* vm) {
  %status maybe
  %variants c2 cv c3 sm
 
- Return the agent timer tick rate of the TARG agent.
+ Return the number of ticks before the next timer event in C2. Other games
+ return the configured timer tick rate.
 */
 void v_TICK(caosVM* vm) {
 	VM_VERIFY_SIZE(0)
 
 	valid_agent(vm->targ);
-	vm->result.setInt(vm->targ->timerrate);
+	if (engine.version == 2)
+		vm->result.setInt(vm->targ->getTicksUntilTimer());
+	else
+		vm->result.setInt(vm->targ->timerrate);
 }
 
 /**

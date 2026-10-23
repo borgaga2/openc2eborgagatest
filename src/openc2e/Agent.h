@@ -258,6 +258,9 @@ class Agent : public std::enable_shared_from_this<Agent> {
 		tickssincelasttimer = 0;
 		timerrate = r;
 	}
+	unsigned int getTicksUntilTimer() const {
+		return tickssincelasttimer < timerrate ? timerrate - tickssincelasttimer : 0;
+	}
 
 	virtual int handleClick(float, float);
 
