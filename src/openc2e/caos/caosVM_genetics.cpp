@@ -20,6 +20,8 @@
 #include "World.h"
 #include "caosVM.h"
 #include "common/throw_ifnot.h"
+#include "common/io/SpanReader.h"
+#include "common/io/VectorWriter.h"
 #include "creatures/CreatureAgent.h"
 #include "fileformats/genomeFile.h"
 #include "historyManager.h"
@@ -34,12 +36,22 @@
  Clone a genome. A new moniker is created.
 */
 void c_GENE_CLON(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(src_slot)
+	VM_PARAM_INTEGER(src_slot)
 	VM_PARAM_VALIDAGENT(src_agent)
-	VM_PARAM_INTEGER_UNUSED(dest_slot)
+	VM_PARAM_INTEGER(dest_slot)
 	VM_PARAM_VALIDAGENT(dest_agent)
 
-	// TODO
+	auto source = src_agent->genome_slots.find(src_slot);
+	THROW_IFNOT(source != src_agent->genome_slots.end() && source->second);
+	VectorWriter encoded;
+	encoded << *source->second;
+	SpanReader input(encoded.vector());
+	auto clone = std::make_shared<genomeFile>();
+	input >> *clone;
+	THROW_IFNOT(!input.has_data_left());
+	const auto moniker = world.history->newMoniker(clone);
+	dest_agent->genome_slots[dest_slot] = clone;
+	world.history->getMoniker(moniker).moveToAgent(dest_agent);
 }
 
 /**
