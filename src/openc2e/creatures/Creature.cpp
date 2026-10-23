@@ -232,6 +232,8 @@ oldCreature::oldCreature(std::shared_ptr<genomeFile> g, bool is_female, unsigned
 	dead = 0;
 
 	brain = 0; // just in case
+	// C1/C2 attention is indexed by the 40 legacy object categories.
+	chosenagents.resize(40);
 }
 
 oldCreature::~oldCreature() {
@@ -248,8 +250,6 @@ c1Creature::c1Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned c
 		i = 0;
 	for (unsigned char& drive : drives)
 		drive = 0;
-
-	// TODO: chosenagents size
 
 	brain = new oldBrain(this);
 	finishInit();
@@ -269,8 +269,6 @@ c2Creature::c2Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned c
 
 	mutationchance = 0;
 	mutationdegree = 0;
-
-	// TODO: chosenagents size
 
 	brain = new oldBrain(this);
 	finishInit();

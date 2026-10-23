@@ -25,6 +25,8 @@
 #include "oldBrain.h"
 #include "oldCreature.h"
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <stdint.h>
 
@@ -46,6 +48,34 @@ void oldCreature::tickBrain() {
 	}
 
 	chooseAgents();
+	// Visible agents feed the legacy stimulus-source lobe. Its cells map to
+	// the same 40 categories used by the attention lobe; nearer agents provide
+	// stronger input, while the lobe's genetically defined leakage lets stale
+	// stimulation fade after an agent leaves sight.
+	oldLobe* stimulusSource = brain->getLobeByTissue(2);
+	if (stimulusSource) {
+		const float ourx = parentagent->x + (parentagent->getWidth() / 2.0f);
+		const float oury = parentagent->y + (parentagent->getHeight() / 2.0f);
+		const float viewRange = parentagent->range;
+		for (unsigned int category = 0; category < chosenagents.size() && category < stimulusSource->getNoNeurons(); ++category) {
+			AgentRef agent = chosenagents[category];
+			if (!agent)
+				continue;
+
+			const float theirx = agent->x + (agent->getWidth() / 2.0f);
+			const float theiry = agent->y + (agent->getHeight() / 2.0f);
+			const float dx = theirx - ourx;
+			const float dy = theiry - oury;
+			const float distance = std::sqrt(dx * dx + dy * dy);
+			const unsigned int signal = viewRange > 0.0f
+				? static_cast<unsigned int>(std::clamp(255.0f * (1.0f - distance / viewRange), 0.0f, 255.0f))
+				: 255;
+
+			oldNeuron* neuron = stimulusSource->getNeuron(category);
+			if (neuron->state < signal)
+				neuron->state = static_cast<unsigned char>(signal);
+		}
+	}
 	AgentRef oldattn = attention;
 	int olddecn = decn;
 
@@ -412,8 +442,71 @@ int c2eCreature::reverseMapVerbToNeuron(unsigned int verb) {
 }
 
 void oldCreature::handleStimulus(unsigned int id) {
-	// TODO
-	(void)id;
+	// A legacy stimulus gene turns an external event into activity in the
+	// general-sensory lobe and changes up to four chemicals.
+	oldLobe* sensory = brain->getLobeByTissue(5);
+	for (auto& gene : genome->genes) {
+		if (!shouldProcessGene(gene.get()))
+			continue;
+
+		auto* stimulus = dynamic_cast<creatureStimulusGene*>(gene.get());
+		if (!stimulus || stimulus->stim != id)
+			continue;
+		if (asleep && !stimulus->whenasleep)
+			continue;
+
+		if (sensory && stimulus->sensoryneuron != 255 &&
+			stimulus->sensoryneuron < sensory->getNoNeurons()) {
+			oldNeuron* neuron = sensory->getNeuron(stimulus->sensoryneuron);
+			const unsigned int state = neuron->state + stimulus->intensity;
+			neuron->state = static_cast<unsigned char>(state > 255 ? 255 : state);
+		}
+
+		for (unsigned int i = 0; i < 4; ++i) {
+			if (stimulus->drives[i] == 255)
+				continue;
+
+			// Amounts are signed fixed-point values centered at 124: 124 means
+			// no change, lower values decrease a chemical, and higher values
+			// increase it. In legacy genomes the field identifies the chemical
+			// directly (including non-drive nutrients).
+			const int change = static_cast<int>(
+				(stimulus->amounts[i] * (1.0f / 124.0f) - 1.0f) * 255.0f);
+			const auto chemical = stimulus->drives[i];
+			if (change > 0)
+				addChemical(chemical, static_cast<unsigned char>(change > 255 ? 255 : change));
+			else if (change < 0)
+				subChemical(chemical, static_cast<unsigned char>(-change));
+		}
+	}
+}
+
+void oldCreature::handleStimulus(unsigned int input, unsigned int intensity, const int stimulusChemicals[4], const int amounts[4]) {
+	// The custom C1/C2 STIM form directly nudges a general-sensory neuron and
+	// injects up to four chemicals. Input 255 means no sensory neuron.
+	if (input != 255) {
+		oldLobe* sensory = brain->getLobeByTissue(5);
+		if (sensory && input < sensory->getNoNeurons()) {
+			oldNeuron* neuron = sensory->getNeuron(input);
+			const unsigned int state = neuron->state + intensity;
+			neuron->state = static_cast<unsigned char>(state > 255 ? 255 : state);
+		}
+	}
+
+	for (unsigned int i = 0; i < 4; ++i) {
+		if (stimulusChemicals[i] <= 0 || stimulusChemicals[i] > 255 || amounts[i] == 0)
+			continue;
+
+		// STIM amounts are signed chemical deltas. Legacy chemistry is stored
+		// as an unsigned 0..255 value, so route negative deltas through the
+		// saturating subtraction path instead of wrapping them to large gains.
+		const int clippedAmount = std::clamp(amounts[i], -255, 255);
+		const auto chemical = static_cast<unsigned char>(stimulusChemicals[i]);
+		if (clippedAmount > 0)
+			addChemical(chemical, static_cast<unsigned char>(clippedAmount));
+		else
+			subChemical(chemical, static_cast<unsigned char>(-clippedAmount));
+	}
 }
 
 void c2eCreature::handleStimulus(c2eStim& stim) {

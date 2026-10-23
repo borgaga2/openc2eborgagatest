@@ -17,7 +17,9 @@
  *
  */
 
+#include "AgentHelpers.h"
 #include "Engine.h"
+#include "Map.h"
 #include "World.h"
 #include "caosVM.h"
 #include "common/Random.h"
@@ -62,15 +64,95 @@ c2eCreature* getc2eCreature(Agent* a) {
 	return c;
 }
 
+enum class LegacyStimulusRoute { heard, seen, touched };
+
+bool receivesLegacyStimulus(Agent* source, Agent* creature, LegacyStimulusRoute route) {
+	if (!source || !creature || source == creature)
+		return false;
+
+	switch (route) {
+		case LegacyStimulusRoute::seen:
+			return agentIsVisible(creature, source);
+
+		case LegacyStimulusRoute::touched:
+			return agentsTouching(source, creature);
+
+		case LegacyStimulusRoute::heard: {
+			const float sourceX = source->x + (source->getWidth() / 2.0f);
+			const float sourceY = source->y + (source->getHeight() / 2.0f);
+			const float creatureX = creature->x + (creature->getWidth() / 2.0f);
+			const float creatureY = creature->y + (creature->getHeight() / 2.0f);
+			const float dx = creatureX - sourceX;
+			const float dy = creatureY - sourceY;
+			MetaRoom* sourceMeta = world.map->metaRoomAt(sourceX, sourceY);
+			MetaRoom* creatureMeta = world.map->metaRoomAt(creatureX, creatureY);
+			if (!sourceMeta || sourceMeta != creatureMeta)
+				return false;
+			return (dx * dx + dy * dy) <= creature->range * creature->range;
+		}
+	}
+	return false;
+}
+
+template <typename ApplyStimulus>
+void routeLegacyStimulus(Agent* source, LegacyStimulusRoute route, ApplyStimulus apply) {
+	if (!source)
+		return;
+	for (const auto& agent : world.agents) {
+		if (!agent)
+			continue;
+		oldCreature* creature = getoldCreature(agent.get());
+		if (creature && receivesLegacyStimulus(source, agent.get(), route))
+			apply(creature);
+	}
+}
+
+void readCustomStimulus(caosVM* vm, int& significance, int& input, int& intensity, int& features, int chemicals[4], int amounts[4]) {
+	VM_PARAM_INTEGER(amount3)
+	VM_PARAM_INTEGER(chemical3)
+	VM_PARAM_INTEGER(amount2)
+	VM_PARAM_INTEGER(chemical2)
+	VM_PARAM_INTEGER(amount1)
+	VM_PARAM_INTEGER(chemical1)
+	VM_PARAM_INTEGER(amount0)
+	VM_PARAM_INTEGER(chemical0)
+	VM_PARAM_INTEGER(parsedFeatures)
+	VM_PARAM_INTEGER(parsedIntensity)
+	VM_PARAM_INTEGER(parsedInput)
+	VM_PARAM_INTEGER(parsedSignificance)
+	significance = parsedSignificance;
+	input = parsedInput;
+	intensity = parsedIntensity;
+	features = parsedFeatures;
+	chemicals[0] = chemical0;
+	chemicals[1] = chemical1;
+	chemicals[2] = chemical2;
+	chemicals[3] = chemical3;
+	amounts[0] = amount0;
+	amounts[1] = amount1;
+	amounts[2] = amount2;
+	amounts[3] = amount3;
+	(void)significance; // C1/C2's significance neuron is not represented in the legacy brain model yet.
+	(void)features; // Feature bits are engine metadata; they do not change the classic lobe input.
+}
+
+void applyCustomStimulus(oldCreature* creature, int input, int intensity, const int chemicals[4], const int amounts[4]) {
+	if (!creature || input < 0 || input > 255 || intensity < 0 || intensity > 255)
+		return;
+	creature->handleStimulus(static_cast<unsigned int>(input), static_cast<unsigned int>(intensity), chemicals, amounts);
+}
+
 /**
  STM# SHOU (command) stimulusno (integer)
  %status stub
  %variants c1 c2
 */
 void c_STM_SHOU(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(stimulusno)
-
-	// TODO
+	VM_PARAM_INTEGER(stimulusno)
+	valid_agent(vm->owner);
+	routeLegacyStimulus(vm->owner.get(), LegacyStimulusRoute::heard, [stimulusno](oldCreature* creature) {
+		creature->handleStimulus(static_cast<unsigned int>(stimulusno));
+	});
 }
 
 /**
@@ -79,9 +161,11 @@ void c_STM_SHOU(caosVM* vm) {
  %variants c1 c2
 */
 void c_STM_SIGN(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(stimulusno)
-
-	// TODO
+	VM_PARAM_INTEGER(stimulusno)
+	valid_agent(vm->owner);
+	routeLegacyStimulus(vm->owner.get(), LegacyStimulusRoute::seen, [stimulusno](oldCreature* creature) {
+		creature->handleStimulus(static_cast<unsigned int>(stimulusno));
+	});
 }
 
 /**
@@ -90,9 +174,11 @@ void c_STM_SIGN(caosVM* vm) {
  %variants c1 c2
 */
 void c_STM_TACT(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(stimulusno)
-
-	// TODO
+	VM_PARAM_INTEGER(stimulusno)
+	valid_agent(vm->owner);
+	routeLegacyStimulus(vm->owner.get(), LegacyStimulusRoute::touched, [stimulusno](oldCreature* creature) {
+		creature->handleStimulus(static_cast<unsigned int>(stimulusno));
+	});
 }
 
 /**
@@ -180,20 +266,13 @@ void c_STIM_WRIT(caosVM* vm) {
  %variants c1 c2
 */
 void c_STIM_SHOU_c2(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(amount3)
-	VM_PARAM_INTEGER_UNUSED(chem3)
-	VM_PARAM_INTEGER_UNUSED(amount2)
-	VM_PARAM_INTEGER_UNUSED(chem2)
-	VM_PARAM_INTEGER_UNUSED(amount1)
-	VM_PARAM_INTEGER_UNUSED(chem1)
-	VM_PARAM_INTEGER_UNUSED(amount0)
-	VM_PARAM_INTEGER_UNUSED(chem0)
-	VM_PARAM_INTEGER_UNUSED(features)
-	VM_PARAM_INTEGER_UNUSED(intensity)
-	VM_PARAM_INTEGER_UNUSED(input)
-	VM_PARAM_INTEGER_UNUSED(significance)
-
-	// TODO
+	int significance, input, intensity, features;
+	int chemicals[4], amounts[4];
+	readCustomStimulus(vm, significance, input, intensity, features, chemicals, amounts);
+	valid_agent(vm->owner);
+	routeLegacyStimulus(vm->owner.get(), LegacyStimulusRoute::heard, [input, intensity, chemicals, amounts](oldCreature* creature) {
+		applyCustomStimulus(creature, input, intensity, chemicals, amounts);
+	});
 }
 
 /**
@@ -202,20 +281,13 @@ void c_STIM_SHOU_c2(caosVM* vm) {
  %variants c1 c2
 */
 void c_STIM_SIGN_c2(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(amount3)
-	VM_PARAM_INTEGER_UNUSED(chem3)
-	VM_PARAM_INTEGER_UNUSED(amount2)
-	VM_PARAM_INTEGER_UNUSED(chem2)
-	VM_PARAM_INTEGER_UNUSED(amount1)
-	VM_PARAM_INTEGER_UNUSED(chem1)
-	VM_PARAM_INTEGER_UNUSED(amount0)
-	VM_PARAM_INTEGER_UNUSED(chem0)
-	VM_PARAM_INTEGER_UNUSED(features)
-	VM_PARAM_INTEGER_UNUSED(intensity)
-	VM_PARAM_INTEGER_UNUSED(input)
-	VM_PARAM_INTEGER_UNUSED(significance)
-
-	// TODO
+	int significance, input, intensity, features;
+	int chemicals[4], amounts[4];
+	readCustomStimulus(vm, significance, input, intensity, features, chemicals, amounts);
+	valid_agent(vm->owner);
+	routeLegacyStimulus(vm->owner.get(), LegacyStimulusRoute::seen, [input, intensity, chemicals, amounts](oldCreature* creature) {
+		applyCustomStimulus(creature, input, intensity, chemicals, amounts);
+	});
 }
 
 /**
@@ -224,20 +296,13 @@ void c_STIM_SIGN_c2(caosVM* vm) {
  %variants c1 c2
 */
 void c_STIM_TACT_c2(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(amount3)
-	VM_PARAM_INTEGER_UNUSED(chem3)
-	VM_PARAM_INTEGER_UNUSED(amount2)
-	VM_PARAM_INTEGER_UNUSED(chem2)
-	VM_PARAM_INTEGER_UNUSED(amount1)
-	VM_PARAM_INTEGER_UNUSED(chem1)
-	VM_PARAM_INTEGER_UNUSED(amount0)
-	VM_PARAM_INTEGER_UNUSED(chem0)
-	VM_PARAM_INTEGER_UNUSED(features)
-	VM_PARAM_INTEGER_UNUSED(intensity)
-	VM_PARAM_INTEGER_UNUSED(input)
-	VM_PARAM_INTEGER_UNUSED(significance)
-
-	// TODO
+	int significance, input, intensity, features;
+	int chemicals[4], amounts[4];
+	readCustomStimulus(vm, significance, input, intensity, features, chemicals, amounts);
+	valid_agent(vm->owner);
+	routeLegacyStimulus(vm->owner.get(), LegacyStimulusRoute::touched, [input, intensity, chemicals, amounts](oldCreature* creature) {
+		applyCustomStimulus(creature, input, intensity, chemicals, amounts);
+	});
 }
 
 /**
@@ -246,25 +311,13 @@ void c_STIM_TACT_c2(caosVM* vm) {
  %variants c1 c2
 */
 void c_STIM_WRIT_c2(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(amount3)
-	VM_PARAM_INTEGER_UNUSED(chem3)
-	VM_PARAM_INTEGER_UNUSED(amount2)
-	VM_PARAM_INTEGER_UNUSED(chem2)
-	VM_PARAM_INTEGER_UNUSED(amount1)
-	VM_PARAM_INTEGER_UNUSED(chem1)
-	VM_PARAM_INTEGER_UNUSED(amount0)
-	VM_PARAM_INTEGER_UNUSED(chem0)
-	VM_PARAM_INTEGER_UNUSED(features)
-	VM_PARAM_INTEGER_UNUSED(intensity)
-	VM_PARAM_INTEGER_UNUSED(input)
-	VM_PARAM_INTEGER_UNUSED(significance)
-	VM_PARAM_AGENT_UNUSED(creature)
-
-	// TODO
-	//oldCreature *c = getoldCreature(creature.get());
-	//if (!c) return; // ignored on non-creatures
-
-	// TODO
+	int significance, input, intensity, features;
+	int chemicals[4], amounts[4];
+	readCustomStimulus(vm, significance, input, intensity, features, chemicals, amounts);
+	VM_PARAM_VALIDAGENT(creature)
+	(void)significance;
+	(void)features;
+	applyCustomStimulus(getoldCreature(creature.get()), input, intensity, chemicals, amounts);
 }
 
 /**
@@ -273,21 +326,13 @@ void c_STIM_WRIT_c2(caosVM* vm) {
  %variants c1 c2
 */
 void c_STIM_FROM_c1(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(amount3)
-	VM_PARAM_INTEGER_UNUSED(chem3)
-	VM_PARAM_INTEGER_UNUSED(amount2)
-	VM_PARAM_INTEGER_UNUSED(chem2)
-	VM_PARAM_INTEGER_UNUSED(amount1)
-	VM_PARAM_INTEGER_UNUSED(chem1)
-	VM_PARAM_INTEGER_UNUSED(amount0)
-	VM_PARAM_INTEGER_UNUSED(chem0)
-	VM_PARAM_INTEGER_UNUSED(features)
-	VM_PARAM_INTEGER_UNUSED(intensity)
-	VM_PARAM_INTEGER_UNUSED(input)
-	VM_PARAM_INTEGER_UNUSED(significance)
-
+	int significance, input, intensity, features;
+	int chemicals[4], amounts[4];
+	readCustomStimulus(vm, significance, input, intensity, features, chemicals, amounts);
 	valid_agent(vm->from.getAgent());
-	// TODO
+	(void)significance;
+	(void)features;
+	applyCustomStimulus(getoldCreature(vm->from.getAgent().get()), input, intensity, chemicals, amounts);
 }
 
 /**

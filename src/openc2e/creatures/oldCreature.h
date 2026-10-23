@@ -71,6 +71,7 @@ class oldCreature : public Creature {
 	virtual unsigned char getDrive(unsigned int id) = 0;
 
 	void handleStimulus(unsigned int id);
+	void handleStimulus(unsigned int input, unsigned int intensity, const int chemicals[4], const int amounts[4]);
 
 	oldBrain* getBrain() { return brain; }
 
