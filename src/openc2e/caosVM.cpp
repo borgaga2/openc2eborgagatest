@@ -19,6 +19,7 @@
 
 #include "caosVM.h"
 
+#include "Agent.h"
 #include "World.h"
 #include "bytecode.h"
 #include "caosScript.h"
@@ -261,15 +262,25 @@ inline void caosVM::runOpCore(script* s, caosOp op) {
 			break;
 		}
 		case CAOS_ENUMPOP: {
-			VM_PARAM_VALUE(v);
-			if (v.isEmpty())
-				break;
-			if (!v.hasAgent()) {
-				dumpStack(this);
-				throw caosException(std::string("Stack item type mismatch: ") + v.dump());
+			// Enumeration holds weak agent references so scripts can safely
+			// kill an item while iterating. An item can also disappear between
+			// the collection and its turn, so discard stale/dead entries here.
+			// The empty value remains the end-of-enumeration sentinel.
+			while (!valueStack.empty()) {
+				VM_PARAM_VALUE(v);
+				if (v.isEmpty())
+					break;
+				if (!v.hasAgent()) {
+					dumpStack(this);
+					throw caosException(std::string("Stack item type mismatch: ") + v.dump());
+				}
+				AgentRef next = v.getAgentRef();
+				if (!next || next->isDying())
+					continue;
+				targ = next;
+				safeJMP(op.argument);
+				return;
 			}
-			targ = v.getAgentRef();
-			safeJMP(op.argument);
 			break;
 		}
 		default:
@@ -409,3 +420,4 @@ void caosVM::tick() {
 }
 
 /* vim: set noet: */
+

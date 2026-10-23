@@ -65,18 +65,48 @@ void c_GENE_CLON(caosVM* vm) {
  Cross two genomes, creating a new one.
 */
 void c_GENE_CROS(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(dad_mutation_degree)
-	VM_PARAM_INTEGER_UNUSED(dad_mutation_chance)
-	VM_PARAM_INTEGER_UNUSED(mum_mutation_degree)
-	VM_PARAM_INTEGER_UNUSED(mum_mutation_chance)
-	VM_PARAM_INTEGER_UNUSED(dad_slot)
+	VM_PARAM_INTEGER(dad_mutation_degree)
+	VM_PARAM_INTEGER(dad_mutation_chance)
+	VM_PARAM_INTEGER(mum_mutation_degree)
+	VM_PARAM_INTEGER(mum_mutation_chance)
+	VM_PARAM_INTEGER(dad_slot)
 	VM_PARAM_VALIDAGENT(dad_agent)
-	VM_PARAM_INTEGER_UNUSED(mum_slot)
+	VM_PARAM_INTEGER(mum_slot)
 	VM_PARAM_VALIDAGENT(mum_agent)
-	VM_PARAM_INTEGER_UNUSED(dest_slot)
+	VM_PARAM_INTEGER(dest_slot)
 	VM_PARAM_VALIDAGENT(dest_agent)
 
-	// TODO
+	// Gene-body mutation is not implemented by genomeFile yet. Keep the
+	// parameters here so CAOS scripts can call the command with the normal
+	// signature; crossover and parentage are still recorded correctly.
+	(void)mum_mutation_chance;
+	(void)mum_mutation_degree;
+	(void)dad_mutation_chance;
+	(void)dad_mutation_degree;
+
+	auto mum = mum_agent->genome_slots.find(mum_slot);
+	auto dad = dad_agent->genome_slots.find(dad_slot);
+	THROW_IFNOT(mum != mum_agent->genome_slots.end() && mum->second);
+	THROW_IFNOT(dad != dad_agent->genome_slots.end() && dad->second);
+	THROW_IFNOT(mum->second->getVersion() == dad->second->getVersion());
+	THROW_IFNOT(mum->second->getVersion() == 1 || mum->second->getVersion() == 2);
+
+	const std::string mother_moniker = world.history->findMoniker(mum->second);
+	const std::string father_moniker = world.history->findMoniker(dad->second);
+	THROW_IFNOT(!mother_moniker.empty() && !father_moniker.empty());
+
+	unsigned int crossover_points = 0;
+	auto child = genomeFile::cross(*mum->second, *dad->second, mother_moniker, father_moniker, crossover_points);
+	const std::string child_moniker = world.history->newMoniker(child);
+	auto output = createUserGeneticsFile(child_moniker + ".gen");
+	output << *child;
+	output.flush();
+
+	dest_agent->genome_slots[dest_slot] = child;
+	auto& history = world.history->getMoniker(child_moniker);
+	history.moveToAgent(dest_agent);
+	history.no_crossover_points = crossover_points;
+	history.addEvent(1, mother_moniker, father_moniker);
 }
 
 /**
@@ -246,3 +276,4 @@ void c_NEW_GENE(caosVM* vm) {
 }
 
 /* vim: set noet: */
+
