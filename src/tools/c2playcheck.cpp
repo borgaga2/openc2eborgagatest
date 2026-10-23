@@ -166,7 +166,21 @@ int main(int argc, char** argv) {
 		}
 		if (creature->getAge() <= start_age || creature->getBrain()->getTicks() <= start_brain_ticks)
 			throw Exception("The Norn's age or brain did not advance");
-		fmt::print("C2 gameplay check passed: 3600 ticks, age {}, brain ticks {}, organs {}\n", creature->getAge(), creature->getBrain()->getTicks(), creature->noOrgans());
+		unsigned int related_norns = 0;
+		for (const auto& candidate : world.agents) {
+			if (!candidate)
+				continue;
+			auto* candidate_agent = dynamic_cast<CreatureAgent*>(candidate.get());
+			auto* candidate_creature = candidate_agent ? dynamic_cast<c2Creature*>(candidate_agent->getCreature()) : nullptr;
+			if (!candidate_creature || !candidate_creature->isAlive())
+				continue;
+			const auto* candidate_genus = dynamic_cast<const creatureGenusGene*>(candidate_creature->getGenome()->getGene(2, 1, 1));
+			if (candidate_genus && candidate_genus->mum == mother_moniker && candidate_genus->dad == father_moniker)
+				++related_norns;
+		}
+		if (related_norns < 2)
+			throw Exception("The placed two-parent C2 egg did not hatch into a second living Norn within 3,600 ticks");
+		fmt::print("C2 gameplay check passed: 3600 ticks, {} related living Norns, age {}, brain ticks {}, organs {}\n", related_norns, creature->getAge(), creature->getBrain()->getTicks(), creature->noOrgans());
 		engine.shutdown();
 		return 0;
 	} catch (const std::exception& error) {

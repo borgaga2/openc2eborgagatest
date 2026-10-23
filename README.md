@@ -105,7 +105,7 @@ cmake --build build --target c2playcheck
 ./build/c2playcheck /path/to/Creatures2
 ```
 
-It checks installed hatchery egg files, C2 room chemistry, a two-parent genetic cross, birth registration, survival, age advancement, and brain updates. It does not test the hatchery window or in-game egg placement, gene-level mutation, or saving and resuming a world. It starts with `--silent`; to run it without an audio device, set the `SDL_AUDIODRIVER` environment variable to `dummy`.
+It checks installed hatchery egg files, C2 room chemistry, a two-parent genetic cross, birth registration, and that a genetically linked egg hatches into a second living Norn during world ticks; it also checks age advancement and brain updates. It does not test the hatchery window or its click-to-place control, gene-level mutation, or saving and resuming a world. It starts with `--silent`; to run it without an audio device, set the `SDL_AUDIODRIVER` environment variable to `dummy`.
 
 ## Advanced Usage
 
