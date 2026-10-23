@@ -87,3 +87,4 @@ std::vector<std::filesystem::path> getCatalogueDirectories();
 
 std::filesystem::path homeDirectory();
 std::filesystem::path storageDirectory();
+void setStorageDirectoryOverride(std::filesystem::path directory);

@@ -1,7 +1,10 @@
 #include "common/Exception.h"
 #include "common/Ascii.h"
 #include "common/io/FileReader.h"
+#include "common/io/FileWriter.h"
+#include "common/io/SpanReader.h"
 #include "fileformats/C2EggFile.h"
+#include "fileformats/genomeFile.h"
 #include "openc2e/Engine.h"
 #include "openc2e/Map.h"
 #include "openc2e/PathResolver.h"
@@ -14,9 +17,24 @@
 #include "sdlbackend/SDLMixerBackend.h"
 
 #include <array>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fmt/core.h>
+#include <memory>
+#include <optional>
 #include <string>
+
+static int32_t monikerToken(const std::string& moniker) {
+	if (moniker.size() != 4)
+		throw Exception("A C2 moniker must be four characters long");
+	uint32_t token = 0;
+	for (unsigned int i = 0; i < 4; ++i)
+		token |= static_cast<uint32_t>(static_cast<uint8_t>(moniker[i])) << (i * 8);
+	int32_t signed_token;
+	std::memcpy(&signed_token, &token, sizeof(token));
+	return signed_token;
+}
 
 // An opt-in integration check against a user's installed C2 assets. It runs
 // the real world, scripts, skeleton and biochemistry with the null renderer.
@@ -39,29 +57,55 @@ int main(int argc, char** argv) {
 			throw Exception("The data directory must contain Creatures 2");
 		const auto egg_directory = findMainDirectoryFile("Eggs");
 		size_t eggs_checked = 0;
+		size_t different_parent_eggs = 0;
+		std::optional<C2EggFile> egg_to_hatch;
 		if (!egg_directory.empty()) {
 			for (const auto& entry : std::filesystem::directory_iterator(egg_directory)) {
 				if (!entry.is_regular_file() || to_ascii_lowercase(entry.path().extension().string()) != ".egg")
 					continue;
 				FileReader egg_reader(entry.path());
-				C2EggFile::read(egg_reader);
+				auto egg = C2EggFile::read(egg_reader);
+				if (!egg.father_genome.empty() && egg.mother_genome != egg.father_genome)
+					++different_parent_eggs;
+				if (!egg_to_hatch && (egg.father_genome.empty() || egg.father_genome == egg.mother_genome))
+					egg_to_hatch = std::move(egg);
 				++eggs_checked;
 			}
 		}
-		fmt::print("C2 hatchery files checked: {} (container and parent genomes)\n", eggs_checked);
+		fmt::print("C2 hatchery files checked: {} ({} with different parent genomes)\n", eggs_checked, different_parent_eggs);
+		if (!egg_to_hatch)
+			throw Exception("No installed C2 egg with a supported single-parent genome was found");
 		const auto check_data_directory = std::filesystem::current_path() / "build" / "c2playcheck-user-data";
 		std::filesystem::create_directories(check_data_directory);
 		data_directories.emplace_back(check_data_directory);
+		SpanReader genome_reader(egg_to_hatch->mother_genome);
+		auto genome = std::make_shared<genomeFile>();
+		genome_reader >> *genome;
+		if (genome->getVersion() != 2)
+			throw Exception("The selected C2 egg does not contain a version 2 genome");
+		const auto egg_moniker = world.history->newMoniker(genome);
+		auto genome_file = createUserGeneticsFile(egg_moniker + ".gen");
+		genome_file << *genome;
+		genome_file.flush();
 		auto room = world.map->getRoom(16);
 		if (!room)
 			throw Exception("Missing the stock C2 incubator room");
 		const int x = static_cast<int>((room->x_left + room->x_right) / 2);
 		const int y = static_cast<int>(room->floorYatX(static_cast<float>(x))) - 150;
-		auto result = engine.executeNetwork(fmt::format("new: simp eggs 8 0 2000 0\nnew: gene tokn norn tokn norn obv2\nnew: crea obv2 0\nsetv norn targ\nmvto {} {}\n", x, y));
+		auto result = engine.executeNetwork(fmt::format(
+			"new: simp eggs 8 {} 2000 0\npose 3\nsetv cls2 2 5 2\nsetv attr 195\n"
+			"new: gene {} {} obv0\nsetv obv1 {}\ntick 2400\nmvto {} {}\nsetv grav 1\n",
+			static_cast<unsigned int>(egg_to_hatch->image) * 8,
+			monikerToken(egg_moniker),
+			monikerToken(egg_moniker),
+			egg_to_hatch->gender,
+			x,
+			y));
 		if (!result.empty())
-			throw Exception("Egg genome creation and hatching failed: " + result);
+			throw Exception("Installed egg materialization failed: " + result);
+		result = engine.executeNetwork(fmt::format("new: crea {} 0\nsetv norn targ\nmvto {} {}\n", monikerToken(egg_moniker), x, y));
 		if (!result.empty())
-			throw Exception(result);
+			throw Exception("The installed egg genome could not create a Norn: " + result);
 		AgentRef newborn = world.selectedcreature;
 		auto* agent = dynamic_cast<CreatureAgent*>(newborn.get());
 		auto* creature = agent ? dynamic_cast<c2Creature*>(agent->getCreature()) : nullptr;
@@ -72,14 +116,14 @@ int main(int argc, char** argv) {
 			throw Exception("NEW: CREA did not register the Norn's birth");
 		const auto start_age = creature->getAge();
 		const auto start_brain_ticks = creature->getBrain()->getTicks();
-		for (unsigned int i = 0; i < 1200; ++i) {
+		for (unsigned int i = 0; i < 3600; ++i) {
 			engine.update();
 			if (!newborn || !creature->isAlive())
 				throw Exception(fmt::format("The newborn Norn died after {} ticks", i + 1));
 		}
 		if (creature->getAge() <= start_age || creature->getBrain()->getTicks() <= start_brain_ticks)
 			throw Exception("The Norn's age or brain did not advance");
-		fmt::print("C2 gameplay check passed: 1200 ticks, age {}, brain ticks {}, organs {}\n", creature->getAge(), creature->getBrain()->getTicks(), creature->noOrgans());
+		fmt::print("C2 gameplay check passed: 3600 ticks, age {}, brain ticks {}, organs {}\n", creature->getAge(), creature->getBrain()->getTicks(), creature->noOrgans());
 		engine.shutdown();
 		return 0;
 	} catch (const std::exception& error) {

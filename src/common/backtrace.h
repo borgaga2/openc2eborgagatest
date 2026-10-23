@@ -7,6 +7,7 @@
 #include <stdint.h>
 // #include <psapi.h>
 #include <dbghelp.h>
+#include <exception>
 #include <stdio.h>
 #include <string.h>
 #pragma comment(lib, "dbghelp.lib")
@@ -133,6 +134,23 @@ LONG WINAPI TopLevelExceptionHandler(PEXCEPTION_POINTERS pExceptionInfo) {
 	return EXCEPTION_CONTINUE_SEARCH;
 }
 
+static void TerminateHandler() {
+	auto exception = std::current_exception();
+	if (exception) {
+		try {
+			std::rethrow_exception(exception);
+		} catch (const std::exception& error) {
+			fprintf(stderr, "Uncaught C++ exception: %s\n", error.what());
+		} catch (...) {
+			fprintf(stderr, "Uncaught non-standard C++ exception\n");
+		}
+	} else {
+		fprintf(stderr, "std::terminate called without an active exception\n");
+	}
+	fflush(stderr);
+	__builtin_trap();
+}
+
 #else // _WIN32
 
 #include <dlfcn.h>
@@ -213,6 +231,7 @@ static void signalhandler(int) {
 
 void install_backtrace_printer() {
 #ifdef _WIN32
+	std::set_terminate(TerminateHandler);
 	SetUnhandledExceptionFilter(TopLevelExceptionHandler);
 #else
 	signal(SIGABRT, signalhandler);

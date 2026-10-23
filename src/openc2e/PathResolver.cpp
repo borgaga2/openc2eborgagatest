@@ -33,6 +33,7 @@
 #include <string>
 #include <system_error>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #ifdef _WIN32
@@ -51,6 +52,11 @@ DataDirectory::DataDirectory(fs::path main_)
 }
 
 std::vector<DataDirectory> data_directories;
+static fs::path storage_directory_override;
+
+void setStorageDirectoryOverride(fs::path directory) {
+	storage_directory_override = std::move(directory);
+}
 
 std::vector<fs::path> getMainDirectories() {
 	std::vector<fs::path> result;
@@ -372,6 +378,11 @@ fs::path homeDirectory() {
 }
 
 fs::path storageDirectory() {
+	if (!storage_directory_override.empty()) {
+		fs::create_directories(storage_directory_override);
+		return storage_directory_override;
+	}
+
 #ifdef _WIN32
 	fs::path dirname = "My Games";
 #elif defined(__APPLE__)

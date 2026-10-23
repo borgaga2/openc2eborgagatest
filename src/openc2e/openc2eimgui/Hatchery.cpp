@@ -23,12 +23,28 @@
 
 #include "Engine.h"
 #include "ImGuiUtils.h"
+#include "Map.h"
+#include "PathResolver.h"
+#include "Room.h"
 #include "World.h"
+#include "common/Ascii.h"
+#include "common/Exception.h"
+#include "common/io/FileReader.h"
+#include "common/io/FileWriter.h"
 #include "common/Random.h"
+#include "common/throw_ifnot.h"
+#include "fileformats/C2EggFile.h"
 #include "fileformats/bmpImage.h"
 #include "fileformats/c16Image.h"
+#include "fileformats/genomeFile.h"
+#include "common/io/SpanReader.h"
+#include "historyManager.h"
 
 #include <array>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <fmt/core.h>
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -67,6 +83,55 @@ struct C2EggInfo {
 
 std::array<C2EggInfo, 10> s_c2eggs;
 
+struct InstalledEgg {
+	std::filesystem::path path;
+	C2EggFile egg;
+	std::string error;
+};
+
+static int32_t monikerToken(const std::string& moniker) {
+	THROW_IFNOT(moniker.size() == 4);
+	uint32_t token = 0;
+	for (unsigned int i = 0; i < 4; ++i)
+		token |= static_cast<uint32_t>(static_cast<uint8_t>(moniker[i])) << (i * 8);
+	int32_t signed_token;
+	std::memcpy(&signed_token, &token, sizeof(token));
+	return signed_token;
+}
+
+std::vector<InstalledEgg> s_installed_eggs;
+std::string s_hatchery_error;
+
+static void HatchInstalledEgg(const C2EggFile& egg) {
+	if (!egg.father_genome.empty() && egg.mother_genome != egg.father_genome)
+		throw Exception("This egg has two different parents; genetic crossing is not available yet.");
+	SpanReader genome_reader(egg.mother_genome);
+	auto genome = std::make_shared<genomeFile>();
+	genome_reader >> *genome;
+	THROW_IFNOT(genome->getVersion() == 2);
+	const auto moniker = world.history->newMoniker(genome);
+	auto genome_file = createUserGeneticsFile(moniker + ".gen");
+	genome_file << *genome;
+	genome_file.flush();
+	auto room = world.map->getRoom(16);
+	if (!room)
+		throw Exception("The C2 incubator room is missing.");
+	const int x = static_cast<int>((room->x_left + room->x_right) / 2);
+	const int y = static_cast<int>(room->floorYatX(static_cast<float>(x))) - 70;
+	const std::string script = fmt::format(
+		"new: simp eggs 8 {} 2000 0\npose 3\nsetv cls2 2 5 2\nsetv attr 195\n"
+		"new: gene {} {} obv0\nsetv obv1 {}\ntick 2400\nmvto {} {}\nsetv grav 1\n",
+		static_cast<unsigned int>(egg.image) * 8,
+		monikerToken(moniker),
+		monikerToken(moniker),
+		egg.gender,
+		x,
+		y);
+	const auto result = engine.executeNetwork(script);
+	if (!result.empty())
+		throw Exception(result);
+}
+
 void LoadHatchery() {
 	if (engine.version == 1) {
 		s_hatcherybackground = LoadImageWithTransparentTopLeft("hatchery/hatchery.bmp")[0];
@@ -78,6 +143,23 @@ void LoadHatchery() {
 	} else if (engine.version == 2) {
 		s_hatcherybackground = LoadImageWithTransparentTopLeft("Applet Data/Hatchery.bmp")[0];
 		s_omelette = LoadImageWithTransparentTopLeft("Applet Data/Omelette.s16");
+		s_installed_eggs.clear();
+		const auto egg_directory = findMainDirectoryFile("Eggs");
+		if (!egg_directory.empty()) {
+			for (const auto& entry : std::filesystem::directory_iterator(egg_directory)) {
+				if (!entry.is_regular_file() || to_ascii_lowercase(entry.path().extension().string()) != ".egg")
+					continue;
+				InstalledEgg installed;
+				installed.path = entry.path();
+				try {
+					FileReader reader(entry.path());
+					installed.egg = C2EggFile::read(reader);
+				} catch (const std::exception& error) {
+					installed.error = error.what();
+				}
+				s_installed_eggs.push_back(std::move(installed));
+			}
+		}
 
 		for (size_t i = 0; i < 10; i++) {
 			// Place eggs from 80-240 horizontally, 110-230 vertically
@@ -112,6 +194,7 @@ void UnloadHatchery() {
 	s_hatcherybackground = {};
 	s_hatcherymask = {};
 	s_omelette = {};
+	s_installed_eggs.clear();
 	for (auto& e : s_c1eggs) {
 		e.texture = {};
 	}
@@ -131,10 +214,7 @@ void DrawHatchery() {
 		return;
 	}
 
-	if (s_hatchery_open && ImGui::Begin("Hatchery", &s_hatchery_open,
-							   ImGuiWindowFlags_NoScrollbar |
-								   ImGuiWindowFlags_NoScrollWithMouse |
-								   ImGuiWindowFlags_NoCollapse)) {
+	if (s_hatchery_open && ImGui::Begin("Hatchery", &s_hatchery_open, ImGuiWindowFlags_NoCollapse)) {
 		if (!s_hatchery_loaded) {
 			LoadHatchery();
 		}
@@ -187,6 +267,27 @@ void DrawHatchery() {
 			DrawTexture(s_omelette[20], p + ImVec2(150, 93));
 			// midsideimg
 			DrawTexture(s_omelette[21], p + ImVec2(141, 177));
+
+			ImGui::SeparatorText("Installed eggs");
+			for (const auto& egg : s_installed_eggs) {
+				ImGui::PushID(egg.path.string().c_str());
+				const auto label = egg.path.filename().string();
+				if (egg.error.empty()) {
+					if (ImGui::Button(label.c_str())) {
+						try {
+							HatchInstalledEgg(egg.egg);
+							s_hatchery_error.clear();
+						} catch (const std::exception& error) {
+							s_hatchery_error = error.what();
+						}
+					}
+				} else {
+					ImGui::TextDisabled("%s (invalid egg)", label.c_str());
+				}
+				ImGui::PopID();
+			}
+			if (!s_hatchery_error.empty())
+				ImGui::TextWrapped("%s", s_hatchery_error.c_str());
 		}
 
 		ImGui::End();

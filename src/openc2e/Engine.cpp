@@ -893,6 +893,7 @@ static fs::path showDirectoryPicker() {
 bool Engine::parseCommandLine(int argc, char* argv[]) {
 	// variables for command-line flags
 	std::vector<fs::path> data_vec;
+	fs::path user_data_path;
 
 	// generate help for backend options
 	std::string available_backends;
@@ -922,6 +923,7 @@ bool Engine::parseCommandLine(int argc, char* argv[]) {
 	desc.add_options()("k,backend", available_backends, cxxopts::value<std::string>(preferred_backend));
 	desc.add_options()("o,audiobackend", available_audiobackends, cxxopts::value<std::string>(preferred_audiobackend));
 	desc.add_options()("d,data-path", "Sets or adds a path to a data directory", cxxopts::value<std::vector<fs::path>>(data_vec));
+	desc.add_options()("user-data-path", "Sets the directory for generated game data", cxxopts::value<fs::path>(user_data_path));
 	desc.add_options()("b,bootstrap", "Sets or adds a path or COS file to bootstrap from", cxxopts::value<std::vector<std::string>>(cmdline_bootstrap));
 	desc.add_options()("m,gamename", "Set the game name", cxxopts::value<std::string>(gamename));
 	desc.add_options()("n,norun", "Don't run the game, just execute scripts");
@@ -930,6 +932,8 @@ bool Engine::parseCommandLine(int argc, char* argv[]) {
 	auto vm = desc.parse(argc, argv);
 	cmdline_enable_sound = !vm.count("silent");
 	cmdline_norun = vm.count("norun");
+	if (vm.count("user-data-path"))
+		setStorageDirectoryOverride(user_data_path);
 
 	if (vm.count("help")) {
 		fmt::print("{}\n", desc.help());
