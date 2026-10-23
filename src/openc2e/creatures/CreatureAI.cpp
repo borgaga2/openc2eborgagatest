@@ -45,22 +45,20 @@ void oldCreature::tickBrain() {
 		// TODO
 	}
 
-	// TODO
-
 	chooseAgents();
-
-	// TODO
-
-	brain->tick();
-
-	// TODO
-
 	AgentRef oldattn = attention;
 	int olddecn = decn;
+
+	brain->tick();
+	// C1/C2 reserve lobe 6 for decisions and lobe 7 for attention.
+	decn = brain->lobes.size() > 6 ? brain->lobes[6]->getWinnerNeuron() : -1;
+	attn = brain->lobes.size() > 7 ? brain->lobes[7]->getWinnerNeuron() : -1;
 
 	// TODO: doesn't belong here
 	if (attn >= 0 && attn < (int)chosenagents.size())
 		attention = chosenagents[attn];
+	else
+		attention.clear();
 
 	if (zombie)
 		return; // TODO: docs say zombies "don't process decision scripts", correct?

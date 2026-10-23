@@ -309,6 +309,18 @@ unsigned int oldLobe::getDendriteCount() {
 	return count;
 }
 
+int oldLobe::getWinnerNeuron() {
+	int winner = -1;
+	unsigned char strongest_output = 0;
+	for (unsigned int i = 0; i < neurons.size(); ++i) {
+		if (neurons[i].output > strongest_output) {
+			winner = static_cast<int>(i);
+			strongest_output = neurons[i].output;
+		}
+	}
+	return winner;
+}
+
 oldLobe::oldLobe(oldBrain* b, oldBrainLobeGene* g) {
 	assert(b);
 	parent = b;

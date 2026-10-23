@@ -103,6 +103,7 @@ class oldLobe {
 
 	unsigned int getNoNeurons() { return neurons.size(); }
 	oldNeuron* getNeuron(unsigned int i) { return &neurons[i]; }
+	int getWinnerNeuron();
 	unsigned int getDendriteCount();
 	unsigned int getWidth() { return width; }
 	unsigned int getHeight() { return height; }
