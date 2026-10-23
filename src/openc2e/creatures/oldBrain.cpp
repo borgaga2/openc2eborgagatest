@@ -20,9 +20,11 @@
 #include "oldBrain.h"
 
 #include "common/Random.h"
+#include "common/Exception.h"
 #include "oldCreature.h"
 
 #include <cassert>
+#include <cstdint>
 #include <fmt/core.h>
 #include <memory>
 
@@ -638,8 +640,8 @@ unsigned int oldNeuron::magicalHash(unsigned int type) {
 	unsigned int out = 1, outsum = 0;
 	for (unsigned int t = type; t <= type_limit; t++) {
 		for (auto& d : dendrites[t]) {
-			// it is a haaaaash, so hopefully nothing will explode about the cast
-			unsigned int v = (unsigned long)d.src;
+			// Fold pointer bits into the small value used by this connectivity hash.
+			unsigned int v = static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(d.src));
 			outsum += v;
 			out *= v;
 		}
@@ -924,6 +926,11 @@ void oldBrain::processGenes() {
 			lobes.push_back(l);
 		}
 	}
+
+	// Lobe zero is the perception lobe used by init() and tick(). Reject a
+	// genome without it here instead of indexing lobes[0] and crashing later.
+	if (lobes.empty())
+		throw Exception("oldBrain could not find a perception lobe (lobe 0) in the creature genome");
 
 	// TODO: this is a problem right now because oldLobe wants a copy of the genome objects
 	/*while (lobes.size() < 8) {

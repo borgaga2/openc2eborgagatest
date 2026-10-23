@@ -22,7 +22,7 @@ static bool path_startswith(const fs::path& path, fs::path prefix) {
 		// ends with a directory separator, ignore last empty component
 		end--;
 	}
-	return std::equal(prefix.begin(), end, path.begin());
+	return std::equal(prefix.begin(), end, path.begin(), path.end());
 }
 
 static void force_update_directory(fs::path dirname) {

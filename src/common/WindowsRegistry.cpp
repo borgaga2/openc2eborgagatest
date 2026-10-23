@@ -4,18 +4,29 @@
 
 #include "common/Exception.h"
 
-#include <codecvt>
 #include <string>
 #include <windows.h>
 
 static std::string to_string(const std::wstring& s) {
-	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> converter;
-	return converter.to_bytes(s);
+	if (s.empty())
+		return {};
+	int size = WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0, nullptr, nullptr);
+	if (size <= 0)
+		return {};
+	std::string result(size, '\0');
+	WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), result.data(), size, nullptr, nullptr);
+	return result;
 }
 
 static std::wstring to_wstring(const std::string& s) {
-	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> converter;
-	return converter.from_bytes(s);
+	if (s.empty())
+		return {};
+	int size = MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
+	if (size <= 0)
+		return {};
+	std::wstring result(size, L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), result.data(), size);
+	return result;
 }
 
 std::string registry_get_string_value(RegistryRootKey root_, const std::string& key_name_, const std::string& value_name_) {

@@ -368,6 +368,9 @@ endif()
 add_executable(openc2e src/openc2e/main.cpp)
 target_include_directories(openc2e PRIVATE src/openc2e)
 target_link_libraries(openc2e openc2e_core openc2e_sdlbackend)
+if (WIN32)
+	target_link_libraries(openc2e ws2_32 dbghelp)
+endif()
 
 add_executable(test_openc2e
 	src/openc2e/tests/CaosTest.cpp
