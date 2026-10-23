@@ -221,6 +221,47 @@ outv mins)");
 		}
 		if (!found_speech_bubble)
 			throw Exception("C2 SAY$ did not create the requested speech bubble");
+		unsigned int most_pressing_drive = 0;
+		for (unsigned int drive = 1; drive < 17; ++drive) {
+			if (creature->getDrive(drive) > creature->getDrive(most_pressing_drive))
+				most_pressing_drive = drive;
+		}
+		const size_t expected_need_word = 56 + most_pressing_drive;
+		if (expected_need_word >= engine.wordlist.size())
+			throw Exception("C2 executable word list is missing the built-in need words");
+		size_t matching_need_bubbles_before = 0;
+		for (const auto& candidate : world.agents) {
+			auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
+			if (bubble && bubble->getText() == engine.wordlist[expected_need_word])
+				++matching_need_bubbles_before;
+		}
+		(void)run_c2_agent_script("targ ownr sayn");
+		size_t matching_need_bubbles_after = 0;
+		for (const auto& candidate : world.agents) {
+			auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
+			if (bubble && bubble->getText() == engine.wordlist[expected_need_word])
+				++matching_need_bubbles_after;
+		}
+		if (matching_need_bubbles_after <= matching_need_bubbles_before)
+			throw Exception("C2 SAYN did not speak the word matching its strongest drive");
+		if (engine.wordlist.size() <= 58)
+			throw Exception("C2 executable word list is missing word 58");
+		const std::string signalled_word = engine.wordlist[58];
+		size_t signalled_word_bubbles_before = 0;
+		for (const auto& candidate : world.agents) {
+			auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
+			if (bubble && bubble->getText() == signalled_word)
+				++signalled_word_bubbles_before;
+		}
+		(void)run_c2_agent_script("targ ownr say# 58");
+		size_t signalled_word_bubbles_after = 0;
+		for (const auto& candidate : world.agents) {
+			auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
+			if (bubble && bubble->getText() == signalled_word)
+				++signalled_word_bubbles_after;
+		}
+		if (signalled_word_bubbles_after <= signalled_word_bubbles_before)
+			throw Exception("C2 SAY# did not speak its built-in word");
 		const float walk_start_x = newborn->x;
 		agent->setDirection(2);
 		agent->startWalking();
