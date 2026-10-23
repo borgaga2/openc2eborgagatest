@@ -107,7 +107,9 @@ static void HatchInstalledEgg(const C2EggFile& egg) {
 	auto mother = std::make_shared<genomeFile>();
 	genome_reader >> *mother;
 	THROW_IFNOT(mother->getVersion() == 2);
-	const auto mother_moniker = egg.mother_moniker.empty() ? "mum0" : egg.mother_moniker;
+	const auto mother_moniker = egg.mother_moniker.empty()
+							? world.history->newMoniker(mother)
+							: egg.mother_moniker;
 	auto mother_file = createUserGeneticsFile(mother_moniker + ".gen");
 	mother_file << *mother;
 	mother_file.flush();
@@ -117,7 +119,9 @@ static void HatchInstalledEgg(const C2EggFile& egg) {
 		auto father = std::make_shared<genomeFile>();
 		father_reader >> *father;
 		THROW_IFNOT(father->getVersion() == 2);
-		father_moniker = egg.father_moniker.empty() ? "dad0" : egg.father_moniker;
+		father_moniker = egg.father_moniker.empty()
+						 ? world.history->newMoniker(father)
+						 : egg.father_moniker;
 		auto father_file = createUserGeneticsFile(father_moniker + ".gen");
 		father_file << *father;
 		father_file.flush();

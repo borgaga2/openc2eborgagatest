@@ -189,7 +189,7 @@ std::string historyManager::newMoniker(std::shared_ptr<genomeFile> genome) {
 	std::string newmoniker = world.generateMoniker(basename);
 	unsigned int i = 0;
 	while (hasMoniker(newmoniker)) { // last-moment sanity check..
-		std::string newmoniker = world.generateMoniker(basename);
+		newmoniker = world.generateMoniker(basename);
 		i++;
 		if (i > 100) // emergency "don't go into an infinite loop handling"
 			throw Exception("Couldn't generate a moniker we don't already have!");
