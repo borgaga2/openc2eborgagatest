@@ -21,6 +21,8 @@
 
 #include "Catalogue.h"
 #include "CreatureAgent.h"
+#include "Map.h"
+#include "Room.h"
 #include "World.h"
 #include "c2eBrain.h"
 #include "c2eCreature.h"
@@ -29,7 +31,9 @@
 #include "oldBrain.h"
 #include "oldCreature.h"
 
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <memory>
 
 Creature::Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a) {
@@ -384,16 +388,48 @@ void c2Creature::tick() {
 	senses[1] = (asleep ? 255 : 0); // asleep
 	senses[2] = 0; // air coldness (TODO)
 	senses[3] = 0; // air hotness (TODO)
-	senses[4] = 0; // light level (TODO)
-	senses[5] = 0; // crowdedness (TODO)
-	senses[6] = 0; // radiation (TODO)
-	senses[7] = 0; // time of day (TODO)
-	senses[8] = 0; // season (TODO)
+	const float centerX = parentagent->x + (parentagent->getWidth() / 2.0f);
+	const float centerY = parentagent->y + (parentagent->getHeight() / 2.0f);
+	const std::shared_ptr<Room> room = world.map->roomAt(centerX, centerY);
+	auto roomSense = [](int value) {
+		return static_cast<unsigned char>(std::clamp(value, 0, 255));
+	};
+	senses[4] = room ? roomSense(room->lite) : 0; // light level
+	senses[5] = 0; // crowdedness, accumulated below
+	senses[6] = room ? roomSense(room->radn) : 0; // radiation
+	senses[7] = static_cast<unsigned char>((std::min(world.timeofday, 4u) * 255u) / 4u); // time of day
+	senses[8] = static_cast<unsigned char>((std::min(world.season, 3u) * 255u) / 3u); // season
 	senses[9] = 255; // air quality (TODO)
 	senses[10] = 0; // slope up (TODO)
 	senses[11] = 0; // slope down (TODO)
 	senses[12] = 0; // wind towards (TODO)
 	senses[13] = 0; // wind behind (TODO)
+	if (parentagent->range > 0.0f) {
+		unsigned int crowdedness = 0;
+		for (const auto& agent : world.agents) {
+			if (!agent || agent.get() == parentagent)
+				continue;
+			auto* otherAgent = dynamic_cast<CreatureAgent*>(agent.get());
+			if (!otherAgent)
+				continue;
+			Creature* other = otherAgent->getCreature();
+			if (!other || !other->isAlive() || other->getGenus() != genus)
+				continue;
+			const float otherX = agent->x + (agent->getWidth() / 2.0f);
+			const float otherY = agent->y + (agent->getHeight() / 2.0f);
+			const float dx = otherX - centerX;
+			const float dy = otherY - centerY;
+			const float distance = std::sqrt(dx * dx + dy * dy);
+			if (distance < parentagent->range) {
+				crowdedness += static_cast<unsigned int>(255.0f * (1.0f - distance / parentagent->range));
+				if (crowdedness >= 255) {
+					crowdedness = 255;
+					break;
+				}
+			}
+		}
+		senses[5] = static_cast<unsigned char>(crowdedness);
+	}
 
 	tickBrain();
 	// TODO: update brain organ every 0.4ms (ie: when brain is processed)!
