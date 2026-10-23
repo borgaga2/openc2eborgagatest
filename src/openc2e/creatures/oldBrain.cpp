@@ -430,8 +430,12 @@ void oldLobe::connect() {
 
 	for (unsigned int type = 0; type < 2; type++) {
 		oldLobe* src = parent->getLobeByTissue(dend_info[type]->srclobe);
-		// TODO: fix srclobe for all dendrites to be within range (srclobe = srclobe % lobes.size())
-		assert(src);
+		if (!src) {
+			throw Exception(fmt::format(
+				"brain lobe references missing source lobe {} for dendrite type {}",
+				static_cast<unsigned int>(dend_info[type]->srclobe),
+				type));
+		}
 
 		// TODO: handle src->neurons.size() being empty? or rather, maybe should never let that happen
 
@@ -590,8 +594,11 @@ void oldLobe::tick() {
 	for (unsigned int type = 0; type < 2; type++) {
 		if (dend_info[type]->migrateflag == 1) {
 			oldLobe* src = parent->getLobeByTissue(dend_info[type]->srclobe);
-			// TODO: see fix srclobe comment above (in oldLobe::connect)
-			assert(src);
+			if (!src) {
+				throw Exception(fmt::format(
+					"brain lobe migration references missing source lobe {}",
+					static_cast<unsigned int>(dend_info[type]->srclobe)));
+			}
 
 			for (auto& neuron : neurons) {
 				if (!neuron.output)
@@ -694,8 +701,11 @@ void oldLobe::neuronTryAllLooseMigration(unsigned int type, oldNeuron& neu) {
 	oldLobe* src[2] = {NULL, NULL};
 	for (unsigned int t = type; t <= type_limit; t++) {
 		src[t] = parent->getLobeByTissue(dend_info[t]->srclobe);
-		// TODO: see fix srclobe comment above (in oldLobe::connect)
-		assert(src[t]);
+		if (!src[t]) {
+			throw Exception(fmt::format(
+				"brain lobe migration references missing source lobe {}",
+				static_cast<unsigned int>(dend_info[t]->srclobe)));
+		}
 
 		// not enough active source dendrites at present?
 		if (src[t]->active_neurons.size() < neu.dendrites[t].size())
