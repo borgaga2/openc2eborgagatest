@@ -7,10 +7,12 @@
 #include "common/io/StringWriter.h"
 #include "common/io/VectorWriter.h"
 #include "openc2e/Bubble.h"
+#include "openc2e/Camera.h"
 #include "fileformats/C2EggFile.h"
 #include "fileformats/genomeFile.h"
 #include "openc2e/Engine.h"
 #include "openc2e/Map.h"
+#include "openc2e/PointerAgent.h"
 #include "openc2e/PathResolver.h"
 #include "openc2e/Room.h"
 #include "openc2e/World.h"
@@ -305,6 +307,53 @@ outv mins)");
 				target_actv_after_touch, touch_vm.stopped(), touch_vm.blocking != nullptr,
 				agentsTouching(newborn.get(), interaction_target.get()), agent->getAimAction(), newborn->x,
 				newborn->getWidth(), interaction_target->x, interaction_target->getWidth()));
+		std::shared_ptr<Agent> pointer_target;
+		int pointer_script = 0;
+		for (const auto& candidate : world.agents) {
+			if (!candidate || candidate.get() == newborn.get() || candidate.get() == interaction_target.get() ||
+				dynamic_cast<CreatureAgent*>(candidate.get()) || dynamic_cast<Bubble*>(candidate.get()))
+				continue;
+			for (int event : {1, 2}) {
+				if (candidate->findScript(event) && candidate->getLastScript() != event) {
+					pointer_target = candidate;
+					pointer_script = event;
+					break;
+				}
+			}
+			if (pointer_target)
+				break;
+		}
+		if (!pointer_target)
+			throw Exception("Could not find a C2 object with an unambiguous activation script for pointer testing");
+		const unsigned int saved_target_attributes = pointer_target->attr;
+		const std::array<int, 3> saved_click_actions = {
+			pointer_target->clac[0], pointer_target->clac[1], pointer_target->clac[2]};
+		const int saved_click_target_actv = pointer_target->actv;
+		PointerAgent* hand = world.hand();
+		const float saved_hand_x = hand->x;
+		const float saved_hand_y = hand->y;
+		pointer_target->attr |= 4;
+		pointer_target->clac[2] = pointer_script - 1; // C2 Activate 1/2 map to script 1/2.
+		pointer_target->actv = 2;
+		BackendEvent move_hand{};
+		move_hand.type = eventmousemove;
+		move_hand.x = pointer_target->x + (pointer_target->getWidth() / 2.0f) - engine.camera->getX();
+		move_hand.y = pointer_target->y + (pointer_target->getHeight() / 2.0f) - engine.camera->getY();
+		hand->handleEvent(move_hand);
+		BackendEvent click_target{};
+		click_target.type = eventmousebuttondown;
+		click_target.button = buttonleft;
+		hand->handleEvent(click_target);
+		engine.update();
+		const bool pointer_activated_target = pointer_target->getLastScript() == pointer_script;
+		pointer_target->attr = saved_target_attributes;
+		pointer_target->clac[0] = saved_click_actions[0];
+		pointer_target->clac[1] = saved_click_actions[1];
+		pointer_target->clac[2] = saved_click_actions[2];
+		pointer_target->actv = saved_click_target_actv;
+		hand->moveTo(saved_hand_x, saved_hand_y, true);
+		if (!pointer_activated_target)
+			throw Exception("A C2 hand click did not activate an object under the pointer");
 		const float walk_start_x = newborn->x;
 		agent->setDirection(2);
 		agent->startWalking();
@@ -347,3 +396,4 @@ outv mins)");
 		return 1;
 	}
 }
+
