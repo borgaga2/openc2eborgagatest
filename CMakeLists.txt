@@ -224,6 +224,7 @@ add_executable(test_fileformats
 	src/fileformats/tests/MngTest.cpp
 	src/fileformats/tests/PrayTest.cpp
 	src/fileformats/tests/SFCMapTest.cpp
+	src/fileformats/tests/SFCObjectTest.cpp
 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(test_fileformats BEFORE PRIVATE -Wconversion -Wsign-conversion -Wsign-compare)
