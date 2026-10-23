@@ -565,7 +565,7 @@ void c2Organ::tick() {
 				processReaction(*reaction);
 		} else {
 			// not enough energy!
-			// TODO: apply atpdamagecoefficient
+			applyInjury(atpdamagecoefficient);
 		}
 
 
@@ -578,7 +578,16 @@ void c2Organ::tick() {
 		float repair = diff * (repairrate / 255.0); // TODO: correct?
 		shorttermlifeforce += repair;
 
-		// TODO: adjust injury chem, apply injury
+		if (repair > 0.0f && lifeforce > 0.0f) {
+			const int healedInjury = static_cast<int>(repair * (255.0f / lifeforce));
+			if (healedInjury > 0)
+				parent->subChemical(14, static_cast<unsigned char>(healedInjury));
+		}
+
+		// Injury receptors store a byte-sized amount for this organ's next
+		// activation. Convert it to the organ's life-force scale before applying.
+		if (injurytoapply != 0)
+			applyInjury(injurytoapply * (lifeforce / (255.0f * 255.0f)));
 	}
 
 	// TODO: ensure we've ticked at least once
@@ -602,6 +611,21 @@ void c2Organ::tick() {
 		shorttermlifeforce -= shorttermlifeforce * (1.0f / 100000.0f);
 		longtermlifeforce -= longtermlifeforce * (1.0f / 100000.0f);
 	}
+}
+
+void c2Organ::applyInjury(float value) {
+	if (value <= 0.0f || lifeforce <= 0.0f)
+		return;
+
+	const float previousLifeForce = shorttermlifeforce;
+	shorttermlifeforce -= value;
+	if (shorttermlifeforce < 0.0f)
+		shorttermlifeforce = 0.0f;
+
+	// The C2 injury chemical is byte-scaled, unlike the normalized C3 value.
+	const int injuryChemical = static_cast<int>((previousLifeForce - shorttermlifeforce) * (255.0f / lifeforce));
+	if (injuryChemical > 0)
+		parent->addChemical(14, static_cast<unsigned char>(injuryChemical));
 }
 
 void c2eOrgan::tick() {
