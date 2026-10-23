@@ -400,10 +400,24 @@ void c2Creature::tick() {
 	senses[7] = static_cast<unsigned char>((std::min(world.timeofday, 4u) * 255u) / 4u); // time of day
 	senses[8] = static_cast<unsigned char>((std::min(world.season, 3u) * 255u) / 3u); // season
 	senses[9] = 255; // air quality (TODO)
-	senses[10] = 0; // slope up (TODO)
-	senses[11] = 0; // slope down (TODO)
-	senses[12] = 0; // wind towards (TODO)
-	senses[13] = 0; // wind behind (TODO)
+	senses[10] = 0; // upslope
+	senses[11] = 0; // downslope
+	senses[12] = 0; // headwind
+	senses[13] = 0; // tailwind
+	const unsigned int direction = parent->getDirection(); // C2: 2=east, 3=west
+	const int facing = direction == 2 ? 1 : direction == 3 ? -1 : 0;
+	if (room && facing != 0) {
+		const float step = 32.0f;
+		const float sampleX = std::clamp(centerX + (facing * step), static_cast<float>(room->x_left), static_cast<float>(room->x_right));
+		const float currentFloor = room->floorYatX(centerX);
+		const float aheadFloor = room->floorYatX(sampleX);
+		const float rise = currentFloor - aheadFloor;
+		senses[10] = roomSense(static_cast<int>(std::clamp(rise * (255.0f / step), 0.0f, 255.0f)));
+		senses[11] = roomSense(static_cast<int>(std::clamp(-rise * (255.0f / step), 0.0f, 255.0f)));
+		const int windAlongFacing = room->windx * facing;
+		senses[12] = roomSense(std::max(0, -windAlongFacing));
+		senses[13] = roomSense(std::max(0, windAlongFacing));
+	}
 	if (parentagent->range > 0.0f) {
 		unsigned int crowdedness = 0;
 		for (const auto& agent : world.agents) {
