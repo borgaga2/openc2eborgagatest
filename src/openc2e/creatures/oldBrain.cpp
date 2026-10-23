@@ -445,11 +445,13 @@ void oldLobe::connect() {
 
 		unsigned int offset = 0;
 		for (auto& destneu : neurons) {
+			unsigned int srcneu_id = offset / destsize;
+			offset += srcsize;
+
 			std::vector<oldDendrite>& dendrites = destneu.dendrites[type];
 			if (dendrites.size() == 0)
 				continue;
 
-			unsigned int srcneu_id = offset / destsize;
 			unsigned int divwidth = srcneu_id / src->width;
 			unsigned int divwidth_r = srcneu_id % src->width;
 
@@ -461,13 +463,13 @@ void oldLobe::connect() {
 			repeat_this_dend:
 				// for the other dendrites, find a source neuron to connect to using fanout
 				int src_x = rand_int32(0, 2 * fanout) + divwidth_r - fanout;
-				int src_y = rand_int32(0, 2 * fanout) + divwidth_r + divwidth;
-				src_x = src_x % src->width;
+				int src_y = rand_int32(0, 2 * fanout) + divwidth - fanout;
+				src_x = src_x % static_cast<int>(src->width);
 				if (src_x < 0)
-					src_x += src->width;
-				src_y = src_y % src->height;
+					src_x += static_cast<int>(src->width);
+				src_y = src_y % static_cast<int>(src->height);
 				if (src_y < 0)
-					src_y += src->height;
+					src_y += static_cast<int>(src->height);
 				unsigned int src_neuid = (src_y * src->width) + src_x;
 
 				// don't loop forever trying the impossible
@@ -507,7 +509,6 @@ void oldLobe::connect() {
 				// connect srcneu with dendrites[type][dend_id]
 				connectDendrite(type, dendrites[dend_id], &srcneu);
 			}
-			offset += srcsize;
 		}
 	}
 
@@ -660,11 +661,12 @@ unsigned int oldNeuron::magicalHash(unsigned int type) {
 bool oldLobe::migrationTryCandidateSlice(unsigned int type, oldLobe* src, std::vector<oldDendrite>& dendrites, unsigned int i) {
 	// we examine a 'slice' of candidate active neurons, one for each dendrite, starting at i
 	for (unsigned int j = 0; j < dendrites.size(); j++) {
-		// if the neuron is perceptible..
-		if (src->neurons[src->active_neurons[i + j]].percept_src && j < dendrites.size() - 1) {
-			// check all previous neurons to make sure they don't collide
-			for (unsigned int k = i + j + 1; k < dendrites.size(); k++) {
-				if (src->neurons[src->active_neurons[i + j]].percept_src == src->neurons[k].percept_src) {
+		unsigned char percept_src = src->neurons[src->active_neurons[i + j]].percept_src;
+		if (percept_src) {
+			// A mutually exclusive perceptible source may only be used once in this slice.
+			for (unsigned int k = j + 1; k < dendrites.size(); k++) {
+				unsigned char other_percept_src = src->neurons[src->active_neurons[i + k]].percept_src;
+				if (percept_src == other_percept_src) {
 					return false;
 				}
 			}
@@ -673,7 +675,7 @@ bool oldLobe::migrationTryCandidateSlice(unsigned int type, oldLobe* src, std::v
 
 	// slice is an acceptable candidate, wire it up
 	for (unsigned int j = 0; j < dendrites.size(); j++) {
-		connectDendrite(type, dendrites[j], &src->neurons[i + j]);
+		connectDendrite(type, dendrites[j], &src->neurons[src->active_neurons[i + j]]);
 	}
 
 	return true;
@@ -722,7 +724,7 @@ void oldLobe::neuronTryAllLooseMigration(unsigned int type, oldNeuron& neu) {
 
 	// shuffle source active neurons
 	for (unsigned int t = type; t <= type_limit; t++) {
-		for (unsigned int i = 0; i < src[t]->active_neurons[i]; i++) {
+		for (unsigned int i = 0; i < src[t]->active_neurons.size(); i++) {
 			std::swap(src[t]->active_neurons[i], rand_choice(src[t]->active_neurons));
 		}
 	}
@@ -1133,6 +1135,12 @@ void oldBrain::processInstinct(creatureInstinctGene& instinct) {
 		fmt::print("instinct failed: no concept lobe\n");
 		return;
 	}
+	if (instinct.action >= lobes[6]->getNoNeurons()) {
+		fmt::print(
+			"instinct failed: decision neuron {} is outside the decision lobe\n",
+			static_cast<unsigned int>(instinct.action));
+		return;
+	}
 	// TODO: verify the concept lobe does actually have type 0 dendrites pointing at the perceptible lobe?
 
 	// find a candidate neuron in the concept lobe with the necessary number
@@ -1176,7 +1184,6 @@ void oldBrain::processInstinct(creatureInstinctGene& instinct) {
 	}
 
 	// find relevant decision neuron
-	// TODO: again, instincts should be sanitised somewhere
 	oldNeuron* decnneu = lobes[6]->getNeuron(instinct.action);
 
 	// work out relevant dendrite type
