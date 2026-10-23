@@ -1906,7 +1906,7 @@ void c_SLIM(caosVM*) {
 
 /**
  BHVR (command) click (integer) touch (integer)
- %status stub
+ %status maybe
  %variants c1 c2
 */
 void c_BHVR_c2(caosVM* vm) {
