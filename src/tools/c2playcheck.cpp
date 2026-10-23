@@ -3,6 +3,7 @@
 #include "common/io/FileReader.h"
 #include "common/io/FileWriter.h"
 #include "common/io/SpanReader.h"
+#include "common/io/VectorWriter.h"
 #include "fileformats/C2EggFile.h"
 #include "fileformats/genomeFile.h"
 #include "openc2e/Engine.h"
@@ -67,14 +68,14 @@ int main(int argc, char** argv) {
 				auto egg = C2EggFile::read(egg_reader);
 				if (!egg.father_genome.empty() && egg.mother_genome != egg.father_genome)
 					++different_parent_eggs;
-				if (!egg_to_hatch && (egg.father_genome.empty() || egg.father_genome == egg.mother_genome))
+				if (!egg_to_hatch)
 					egg_to_hatch = std::move(egg);
 				++eggs_checked;
 			}
 		}
 		fmt::print("C2 hatchery files checked: {} ({} with different parent genomes)\n", eggs_checked, different_parent_eggs);
 		if (!egg_to_hatch)
-			throw Exception("No installed C2 egg with a supported single-parent genome was found");
+			throw Exception("No installed C2 egg was found");
 		const auto check_data_directory = std::filesystem::current_path() / "build" / "c2playcheck-user-data";
 		std::filesystem::create_directories(check_data_directory);
 		data_directories.emplace_back(check_data_directory);
@@ -83,10 +84,27 @@ int main(int argc, char** argv) {
 		genome_reader >> *genome;
 		if (genome->getVersion() != 2)
 			throw Exception("The selected C2 egg does not contain a version 2 genome");
-		const auto egg_moniker = world.history->newMoniker(genome);
-		auto genome_file = createUserGeneticsFile(egg_moniker + ".gen");
-		genome_file << *genome;
-		genome_file.flush();
+		const std::string mother_moniker = "mum0";
+		const std::string father_moniker = "dad0";
+		std::shared_ptr<genomeFile> father_genome;
+		for (const auto& candidate_moniker : {"norn", "gold", "test"}) {
+			auto candidate = world.loadGenome(candidate_moniker);
+			if (!candidate || candidate->getVersion() != 2)
+				continue;
+			VectorWriter encoded_candidate;
+			encoded_candidate << *candidate;
+			if (encoded_candidate.vector() != egg_to_hatch->mother_genome) {
+				father_genome = std::move(candidate);
+				break;
+			}
+		}
+		if (!father_genome)
+			throw Exception("Could not find a second distinct C2 parent genome for the crossing check");
+		for (const auto& parent : {std::pair<std::string, std::shared_ptr<genomeFile>>(mother_moniker, genome), {father_moniker, father_genome}}) {
+			auto genome_file = createUserGeneticsFile(parent.first + ".gen");
+			genome_file << *parent.second;
+			genome_file.flush();
+		}
 		auto room = world.map->getRoom(16);
 		if (!room)
 			throw Exception("Missing the stock C2 incubator room");
@@ -94,18 +112,18 @@ int main(int argc, char** argv) {
 		const int y = static_cast<int>(room->floorYatX(static_cast<float>(x))) - 150;
 		auto result = engine.executeNetwork(fmt::format(
 			"new: simp eggs 8 {} 2000 0\npose 3\nsetv cls2 2 5 2\nsetv attr 195\n"
-			"new: gene {} {} obv0\nsetv obv1 {}\ntick 2400\nmvto {} {}\nsetv grav 1\n",
+			"new: gene {} {} obv0\nsetv obv1 {}\ntick 2400\nmvto {} {}\nsetv grav 1\n"
+			"new: crea obv0 0\nsetv norn targ\nmvto {} {}\n",
 			static_cast<unsigned int>(egg_to_hatch->image) * 8,
-			monikerToken(egg_moniker),
-			monikerToken(egg_moniker),
+			monikerToken(mother_moniker),
+			monikerToken(father_moniker),
 			egg_to_hatch->gender,
+			x,
+			y,
 			x,
 			y));
 		if (!result.empty())
-			throw Exception("Installed egg materialization failed: " + result);
-		result = engine.executeNetwork(fmt::format("new: crea {} 0\nsetv norn targ\nmvto {} {}\n", monikerToken(egg_moniker), x, y));
-		if (!result.empty())
-			throw Exception("The installed egg genome could not create a Norn: " + result);
+			throw Exception("Installed two-parent egg and creature creation failed: " + result);
 		AgentRef newborn = world.selectedcreature;
 		auto* agent = dynamic_cast<CreatureAgent*>(newborn.get());
 		auto* creature = agent ? dynamic_cast<c2Creature*>(agent->getCreature()) : nullptr;
@@ -114,6 +132,9 @@ int main(int argc, char** argv) {
 		const auto moniker = world.history->findMoniker(creature->getGenome());
 		if (world.history->getMoniker(moniker).getStatus() != borncreature)
 			throw Exception("NEW: CREA did not register the Norn's birth");
+		const auto* genus = dynamic_cast<const creatureGenusGene*>(creature->getGenome()->getGene(2, 1, 1));
+		if (!genus || genus->mum != mother_moniker || genus->dad != father_moniker)
+			throw Exception("The crossed genome did not preserve both parent monikers");
 		const auto start_age = creature->getAge();
 		const auto start_brain_ticks = creature->getBrain()->getTicks();
 		for (unsigned int i = 0; i < 3600; ++i) {

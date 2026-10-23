@@ -90,9 +90,9 @@ struct InstalledEgg {
 };
 
 static int32_t monikerToken(const std::string& moniker) {
-	THROW_IFNOT(moniker.size() == 4);
+	THROW_IFNOT(moniker.size() <= 4);
 	uint32_t token = 0;
-	for (unsigned int i = 0; i < 4; ++i)
+	for (unsigned int i = 0; i < moniker.size(); ++i)
 		token |= static_cast<uint32_t>(static_cast<uint8_t>(moniker[i])) << (i * 8);
 	int32_t signed_token;
 	std::memcpy(&signed_token, &token, sizeof(token));
@@ -103,16 +103,25 @@ std::vector<InstalledEgg> s_installed_eggs;
 std::string s_hatchery_error;
 
 static void HatchInstalledEgg(const C2EggFile& egg) {
-	if (!egg.father_genome.empty() && egg.mother_genome != egg.father_genome)
-		throw Exception("This egg has two different parents; genetic crossing is not available yet.");
 	SpanReader genome_reader(egg.mother_genome);
-	auto genome = std::make_shared<genomeFile>();
-	genome_reader >> *genome;
-	THROW_IFNOT(genome->getVersion() == 2);
-	const auto moniker = world.history->newMoniker(genome);
-	auto genome_file = createUserGeneticsFile(moniker + ".gen");
-	genome_file << *genome;
-	genome_file.flush();
+	auto mother = std::make_shared<genomeFile>();
+	genome_reader >> *mother;
+	THROW_IFNOT(mother->getVersion() == 2);
+	const auto mother_moniker = egg.mother_moniker.empty() ? "mum0" : egg.mother_moniker;
+	auto mother_file = createUserGeneticsFile(mother_moniker + ".gen");
+	mother_file << *mother;
+	mother_file.flush();
+	std::string father_moniker;
+	if (!egg.father_genome.empty()) {
+		SpanReader father_reader(egg.father_genome);
+		auto father = std::make_shared<genomeFile>();
+		father_reader >> *father;
+		THROW_IFNOT(father->getVersion() == 2);
+		father_moniker = egg.father_moniker.empty() ? "dad0" : egg.father_moniker;
+		auto father_file = createUserGeneticsFile(father_moniker + ".gen");
+		father_file << *father;
+		father_file.flush();
+	}
 	auto room = world.map->getRoom(16);
 	if (!room)
 		throw Exception("The C2 incubator room is missing.");
@@ -122,8 +131,8 @@ static void HatchInstalledEgg(const C2EggFile& egg) {
 		"new: simp eggs 8 {} 2000 0\npose 3\nsetv cls2 2 5 2\nsetv attr 195\n"
 		"new: gene {} {} obv0\nsetv obv1 {}\ntick 2400\nmvto {} {}\nsetv grav 1\n",
 		static_cast<unsigned int>(egg.image) * 8,
-		monikerToken(moniker),
-		monikerToken(moniker),
+		monikerToken(mother_moniker),
+		monikerToken(father_moniker),
 		egg.gender,
 		x,
 		y);

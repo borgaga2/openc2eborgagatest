@@ -50,6 +50,7 @@ class genomeFile {
 
 	void readNotes(Reader&);
 	void writeNotes(Writer&) const;
+	static std::shared_ptr<genomeFile> cross(const genomeFile&, const genomeFile&, const std::string& mother, const std::string& father, unsigned int& crossover_points);
 
 	uint8_t getVersion() { return cversion; }
 

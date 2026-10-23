@@ -22,7 +22,12 @@
 #include "common/io/IOException.h"
 #include "common/io/Reader.h"
 #include "common/io/Writer.h"
+#include "common/io/VectorWriter.h"
+#include "common/io/SpanReader.h"
+#include "common/Random.h"
+#include "common/throw_ifnot.h"
 
+#include <algorithm>
 #include <cstring>
 #include <exception>
 #include <typeinfo>
@@ -230,6 +235,65 @@ gene* genomeFile::getGene(uint8_t type, uint8_t subtype, unsigned int seq) {
 	}
 
 	return nullptr;
+}
+
+std::shared_ptr<genomeFile> genomeFile::cross(const genomeFile& mother, const genomeFile& father, const std::string& mother_moniker, const std::string& father_moniker, unsigned int& crossover_points) {
+	THROW_IFNOT(mother.cversion == father.cversion);
+	THROW_IFNOT(mother.cversion == 1 || mother.cversion == 2);
+	THROW_IFNOT(!mother.genes.empty() && !father.genes.empty());
+
+	const size_t gene_count = std::max(mother.genes.size(), father.genes.size());
+	std::vector<size_t> points;
+	if (gene_count > 1) {
+		const size_t max_points = std::min<size_t>(8, gene_count - 1);
+		const size_t count = static_cast<size_t>(rand_int32(1, static_cast<int32_t>(max_points)));
+		while (points.size() < count) {
+			const size_t point = static_cast<size_t>(rand_int32(1, static_cast<int32_t>(gene_count - 1)));
+			if (std::find(points.begin(), points.end(), point) == points.end())
+				points.push_back(point);
+		}
+		std::sort(points.begin(), points.end());
+	}
+	crossover_points = static_cast<unsigned int>(points.size());
+
+	VectorWriter encoded;
+	const char magic[4] = {'d', 'n', 'a', '2'};
+	encoded.write(magic, sizeof(magic));
+	const gene* genus_source = nullptr;
+	for (const auto& candidate : mother.genes) {
+		if (dynamic_cast<const creatureGenusGene*>(candidate.get())) {
+			genus_source = candidate.get();
+			break;
+		}
+	}
+	THROW_IFNOT(genus_source);
+	encoded << *genus_source;
+
+	size_t point_index = 0;
+	for (size_t i = 1; i < gene_count; ++i) {
+		while (point_index < points.size() && i >= points[point_index])
+			++point_index;
+		const bool use_father = (point_index % 2) != 0;
+		const auto& preferred = use_father ? father.genes : mother.genes;
+		const auto& fallback = use_father ? mother.genes : father.genes;
+		const gene* selected = i < preferred.size() ? preferred[i].get() : (i < fallback.size() ? fallback[i].get() : nullptr);
+		if (selected && !dynamic_cast<const creatureGenusGene*>(selected))
+			encoded << *selected;
+	}
+	encoded.write("gend", 4);
+
+	SpanReader reader(encoded.vector());
+	auto child = std::make_shared<genomeFile>();
+	reader >> *child;
+	THROW_IFNOT(!reader.has_data_left());
+	for (auto& candidate : child->genes) {
+		if (auto* genus = dynamic_cast<creatureGenusGene*>(candidate.get())) {
+			genus->mum = mother_moniker;
+			genus->dad = father_moniker;
+			break;
+		}
+	}
+	return child;
 }
 
 uint8_t geneFlags::operator()() const {

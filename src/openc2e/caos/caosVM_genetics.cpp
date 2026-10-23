@@ -191,23 +191,55 @@ void v_MTOC(caosVM* vm) {
 
 /**
  NEW: GENE (command) mum (integer) dad (integer) destination (variable)
- %status stub
+ %status maybe
  %variants c1 c2
+
+Clone a single-parent genome or cross two parent genomes. Gene-body mutations are not applied yet.
 */
 void c_NEW_GENE(caosVM* vm) {
 	VM_PARAM_VARIABLE(destination)
 	VM_PARAM_INTEGER(dad)
 	VM_PARAM_INTEGER(mum)
 
-	const auto mother_moniker = std::string(reinterpret_cast<const char*>(&mum), 4);
-	const auto father_moniker = std::string(reinterpret_cast<const char*>(&dad), 4);
-	THROW_IFNOT(dad == 0 || mother_moniker == father_moniker);
+	auto unpack_moniker = [](int32_t token) {
+		std::string moniker(reinterpret_cast<const char*>(&token), 4);
+		while (!moniker.empty() && moniker.back() == '\0')
+			moniker.pop_back();
+		return moniker;
+	};
+	const auto mother_moniker = unpack_moniker(mum);
+	const auto father_moniker = unpack_moniker(dad);
+	THROW_IFNOT(!mother_moniker.empty());
 	auto genome = world.loadGenome(mother_moniker);
 	THROW_IFNOT(genome && genome->getVersion() == engine.version);
+	unsigned int crossover_points = 0;
+	if (!father_moniker.empty() && father_moniker != mother_moniker) {
+		auto father = world.loadGenome(father_moniker);
+		THROW_IFNOT(father && father->getVersion() == engine.version);
+		genome = genomeFile::cross(*genome, *father, mother_moniker, father_moniker, crossover_points);
+	} else {
+		VectorWriter encoded;
+		encoded << *genome;
+		SpanReader reader(encoded.vector());
+		genome = std::make_shared<genomeFile>();
+		reader >> *genome;
+		THROW_IFNOT(!reader.has_data_left());
+		for (auto& candidate : genome->genes) {
+			if (auto* genus = dynamic_cast<creatureGenusGene*>(candidate.get())) {
+				genus->mum = mother_moniker;
+				genus->dad.clear();
+				break;
+			}
+		}
+	}
 	const auto child_moniker = world.history->newMoniker(genome);
 	auto output = createUserGeneticsFile(child_moniker + ".gen");
 	output << *genome;
 	output.flush();
+	auto& history = world.history->getMoniker(child_moniker);
+	history.no_crossover_points = crossover_points;
+	if (!father_moniker.empty() && father_moniker != mother_moniker)
+		history.addEvent(1, mother_moniker, father_moniker);
 	int32_t child_token;
 	std::memcpy(&child_token, child_moniker.data(), sizeof(child_token));
 	destination->setInt(child_token);

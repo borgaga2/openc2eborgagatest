@@ -606,7 +606,20 @@ std::shared_ptr<genomeFile> World::loadGenome(const std::string& moniker) {
 	std::vector<fs::path> possibles = findGeneticsFiles(moniker + ".gen");
 	if (possibles.empty())
 		return std::shared_ptr<genomeFile>();
-	auto filename = rand_choice(possibles);
+	fs::path filename;
+	std::error_code error;
+	const fs::path user_genetics = getUserDataDir() / "Genetics";
+	if (fs::is_directory(user_genetics, error)) {
+		for (const auto& possible : possibles) {
+			error.clear();
+			if (fs::equivalent(possible.parent_path(), user_genetics, error) && !error) {
+				filename = possible;
+				break;
+			}
+		}
+	}
+	if (filename.empty())
+		filename = rand_choice(possibles);
 
 	std::shared_ptr<genomeFile> p(new genomeFile());
 	FileReader gfile(filename);
