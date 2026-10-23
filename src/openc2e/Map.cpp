@@ -135,26 +135,31 @@ void Map::tick() {
 			r->resetTick();
 }
 
-MetaRoom* Map::metaRoomAt(unsigned int x, unsigned int y) {
+
+MetaRoom* Map::metaRoomAt(float x, float y) {
+	MetaRoom* wrapping_metaroom = nullptr;
 	for (auto& m : metarooms) {
-		if (x >= m->x() && y >= m->y()) {
-			if (x <= m->x() + m->width() && y <= m->y() + m->height()) {
-				return m.get();
-			}
-		}
+		if (y < m->y() || y > m->y() + m->height())
+			continue;
+
+		if (x >= m->x() && x <= m->x() + m->width())
+			return m.get();
+
+		if (m->wraparound() && !wrapping_metaroom)
+			wrapping_metaroom = m.get();
 	}
-	return nullptr;
+	return wrapping_metaroom;
 }
 
 std::shared_ptr<Room> Map::roomAt(float _x, float _y) {
-	MetaRoom* m = metaRoomAt((unsigned int)_x, (unsigned int)_y); // TODO: good casts?
+	MetaRoom* m = metaRoomAt(_x, _y);
 	if (!m)
 		return std::shared_ptr<Room>();
 	return m->roomAt(_x, _y);
 }
 
 std::vector<std::shared_ptr<Room>> Map::roomsAt(float _x, float _y) {
-	MetaRoom* m = metaRoomAt((unsigned int)_x, (unsigned int)_y); // TODO: good casts?
+	MetaRoom* m = metaRoomAt(_x, _y);
 	if (!m)
 		return std::vector<std::shared_ptr<Room>>();
 	return m->roomsAt(_x, _y);

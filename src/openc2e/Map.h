@@ -67,7 +67,7 @@ class Map {
 	std::shared_ptr<Room> getRoom(unsigned int);
 	unsigned int getRoomCount();
 
-	MetaRoom* metaRoomAt(unsigned int, unsigned int);
+	MetaRoom* metaRoomAt(float, float);
 	std::shared_ptr<Room> roomAt(float, float);
 	std::vector<std::shared_ptr<Room>> roomsAt(float, float);
 
