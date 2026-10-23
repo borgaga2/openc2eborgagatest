@@ -21,6 +21,7 @@
 
 #include "Catalogue.h"
 #include "Engine.h" // version
+#include "PathResolver.h"
 #include "World.h"
 #include "caosValue.h"
 #include "common/Exception.h"
@@ -188,7 +189,7 @@ std::string historyManager::newMoniker(std::shared_ptr<genomeFile> genome) {
 
 	std::string newmoniker = world.generateMoniker(basename);
 	unsigned int i = 0;
-	while (hasMoniker(newmoniker)) { // last-moment sanity check..
+	while (hasMoniker(newmoniker) || !findGeneticsFiles(newmoniker + ".gen").empty()) {
 		newmoniker = world.generateMoniker(basename);
 		i++;
 		if (i > 100) // emergency "don't go into an infinite loop handling"
