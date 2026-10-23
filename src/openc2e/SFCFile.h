@@ -52,15 +52,15 @@ struct SFCScript {
 
 class SFCFile {
   private:
-	unsigned int ver;
+	unsigned int ver = 0;
 
 	std::vector<SFCClass*> storage;
 	std::map<unsigned int, unsigned int> types;
 
-	Reader* ourStream;
+	Reader* ourStream = nullptr;
 
   public:
-	MapData* mapdata;
+	MapData* mapdata = nullptr;
 	std::vector<SFCObject*> objects;
 	std::vector<SFCScenery*> scenery;
 	std::vector<SFCScript> scripts;
@@ -72,6 +72,7 @@ class SFCFile {
 	std::vector<std::string> speech_history;
 
 	SFCFile() {}
+	explicit SFCFile(Reader& input) : ourStream(&input) {}
 	~SFCFile();
 	void read(Reader* i);
 	SFCClass* slurpMFC(unsigned int reqtype = 0);
@@ -143,8 +144,9 @@ class CRoom : public SFCClass {
 	int32_t roomtype;
 	uint8_t floorvalue;
 	uint8_t inorganicnutrients, organicnutrients, temperature, pressure, lightlevel, radiation;
-	signed char heatsource, pressuresource, lightsource, radiationsource;
-	uint32_t windx, windy;
+	// Sources and wind are signed DWORDs in C2 archives, unlike the byte levels above.
+	int32_t heatsource, pressuresource, lightsource, radiationsource;
+	int32_t windx, windy;
 	std::vector<std::pair<uint32_t, uint32_t> > floorpoints;
 	std::string music;
 	uint32_t dropstatus;
