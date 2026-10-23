@@ -191,6 +191,7 @@ add_library(openc2e-fileformats STATIC
 	src/fileformats/c1defaultpalette.cpp
 	src/fileformats/c16Image.cpp
 	src/fileformats/c2cobfile.cpp
+	src/fileformats/C2EggFile.cpp
 	src/fileformats/genomeFile.cpp
 	src/fileformats/hedfile.cpp
 	src/fileformats/MFCReader.cpp
@@ -219,6 +220,7 @@ target_link_libraries(openc2e-fileformats
 
 add_executable(test_fileformats
 	src/fileformats/tests/CaosLexerTest.cpp
+	src/fileformats/tests/C2EggFileTest.cpp
 	src/fileformats/tests/CatalogueFileTest.cpp
 	src/fileformats/tests/CfgFileTest.cpp
 	src/fileformats/tests/MngTest.cpp

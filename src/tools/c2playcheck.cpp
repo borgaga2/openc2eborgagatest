@@ -1,6 +1,10 @@
 #include "common/Exception.h"
+#include "common/Ascii.h"
+#include "common/io/FileReader.h"
+#include "fileformats/C2EggFile.h"
 #include "openc2e/Engine.h"
 #include "openc2e/Map.h"
+#include "openc2e/PathResolver.h"
 #include "openc2e/Room.h"
 #include "openc2e/World.h"
 #include "openc2e/creatures/CreatureAgent.h"
@@ -10,6 +14,7 @@
 #include "sdlbackend/SDLMixerBackend.h"
 
 #include <array>
+#include <filesystem>
 #include <fmt/core.h>
 #include <string>
 
@@ -32,6 +37,18 @@ int main(int argc, char** argv) {
 		initialized = true;
 		if (engine.gametype != "c2")
 			throw Exception("The data directory must contain Creatures 2");
+		const auto egg_directory = findMainDirectoryFile("Eggs");
+		size_t eggs_checked = 0;
+		if (!egg_directory.empty()) {
+			for (const auto& entry : std::filesystem::directory_iterator(egg_directory)) {
+				if (!entry.is_regular_file() || to_ascii_lowercase(entry.path().extension().string()) != ".egg")
+					continue;
+				FileReader egg_reader(entry.path());
+				C2EggFile::read(egg_reader);
+				++eggs_checked;
+			}
+		}
+		fmt::print("C2 hatchery files checked: {} (container and parent genomes)\n", eggs_checked);
 		auto room = world.map->getRoom(16);
 		if (!room)
 			throw Exception("Missing the stock C2 incubator room");

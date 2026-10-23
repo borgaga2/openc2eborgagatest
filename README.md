@@ -105,7 +105,7 @@ cmake --build build --target c2playcheck
 ./build/c2playcheck /path/to/Creatures2
 ```
 
-It checks birth registration, survival, age advancement, and brain updates. It does not verify the hatchery UI or saving and resuming a world. To run without an audio device, set the `SDL_AUDIODRIVER` environment variable to `dummy`.
+It checks installed hatchery egg files and their parent genomes, birth registration, survival, age advancement, and brain updates. It does not verify hatchery placement, genetic crossing or mutation, or saving and resuming a world. To run without an audio device, set the `SDL_AUDIODRIVER` environment variable to `dummy`.
 
 ## Advanced Usage
 
