@@ -2300,4 +2300,3 @@ void v_MTHX(caosVM* vm) {
 void v_MTHY(caosVM* vm) {
 	vm->result.setFloat(0); // TODO
 }
-
