@@ -47,8 +47,8 @@ int main(int argc, char** argv) {
 	bool initialized = false;
 	try {
 		engine.addPossibleAudioBackend("sdlmixer", SDLMixerBackend::get_instance());
-		std::array<std::string, 7> args = {argv[0], "--backend", "null", "--audiobackend", "sdlmixer", "--data-path", argv[1]};
-		std::array<char*, 7> pointers;
+		std::array<std::string, 8> args = {argv[0], "--backend", "null", "--audiobackend", "sdlmixer", "--silent", "--data-path", argv[1]};
+		std::array<char*, 8> pointers;
 		for (size_t i = 0; i < args.size(); ++i)
 			pointers[i] = args[i].data();
 		if (!engine.parseCommandLine(static_cast<int>(pointers.size()), pointers.data()) || !engine.initialSetup())

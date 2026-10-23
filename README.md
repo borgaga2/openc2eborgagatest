@@ -98,14 +98,14 @@ The engine will try to guess the game based on files in the directory. If it can
 
 ### Creatures 2 gameplay check
 
-An optional integration check uses your installed C2 assets to create a newborn Norn and advance the real world for 1,200 ticks with a null renderer:
+An optional integration check uses your installed C2 assets to create a newborn Norn and advance the real world for 3,600 ticks with a null renderer and audio muted:
 
 ```bash
 cmake --build build --target c2playcheck
 ./build/c2playcheck /path/to/Creatures2
 ```
 
-It checks installed hatchery egg files and their parent genomes, birth registration, survival, age advancement, and brain updates. It does not verify hatchery placement, genetic crossing or mutation, or saving and resuming a world. To run without an audio device, set the `SDL_AUDIODRIVER` environment variable to `dummy`.
+It checks installed hatchery egg files, C2 room chemistry, a two-parent genetic cross, birth registration, survival, age advancement, and brain updates. It does not test the hatchery window or in-game egg placement, gene-level mutation, or saving and resuming a world. It starts with `--silent`; to run it without an audio device, set the `SDL_AUDIODRIVER` environment variable to `dummy`.
 
 ## Advanced Usage
 
