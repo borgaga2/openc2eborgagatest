@@ -49,12 +49,17 @@ int main(int argc, char** argv) {
 			}
 		}
 		fmt::print("C2 hatchery files checked: {} (container and parent genomes)\n", eggs_checked);
+		const auto check_data_directory = std::filesystem::current_path() / "build" / "c2playcheck-user-data";
+		std::filesystem::create_directories(check_data_directory);
+		data_directories.emplace_back(check_data_directory);
 		auto room = world.map->getRoom(16);
 		if (!room)
 			throw Exception("Missing the stock C2 incubator room");
 		const int x = static_cast<int>((room->x_left + room->x_right) / 2);
 		const int y = static_cast<int>(room->floorYatX(static_cast<float>(x))) - 150;
-		const auto result = engine.executeNetwork(fmt::format("new: crea tokn norn 1\nsetv norn targ\nmvto {} {}\n", x, y));
+		auto result = engine.executeNetwork(fmt::format("new: simp eggs 8 0 2000 0\nnew: gene tokn norn tokn norn obv2\nnew: crea obv2 0\nsetv norn targ\nmvto {} {}\n", x, y));
+		if (!result.empty())
+			throw Exception("Egg genome creation and hatching failed: " + result);
 		if (!result.empty())
 			throw Exception(result);
 		AgentRef newborn = world.selectedcreature;

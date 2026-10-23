@@ -18,8 +18,11 @@
  */
 
 #include "World.h"
+#include "Engine.h"
+#include "PathResolver.h"
 #include "caosVM.h"
 #include "common/throw_ifnot.h"
+#include "common/io/FileWriter.h"
 #include "common/io/SpanReader.h"
 #include "common/io/VectorWriter.h"
 #include "creatures/CreatureAgent.h"
@@ -27,6 +30,7 @@
 #include "historyManager.h"
 
 #include <cassert>
+#include <cstring>
 #include <memory>
 
 /**
@@ -192,10 +196,21 @@ void v_MTOC(caosVM* vm) {
 */
 void c_NEW_GENE(caosVM* vm) {
 	VM_PARAM_VARIABLE(destination)
-	VM_PARAM_INTEGER_UNUSED(dad)
+	VM_PARAM_INTEGER(dad)
 	VM_PARAM_INTEGER(mum)
 
-	destination->setInt(mum); // TODO
+	const auto mother_moniker = std::string(reinterpret_cast<const char*>(&mum), 4);
+	const auto father_moniker = std::string(reinterpret_cast<const char*>(&dad), 4);
+	THROW_IFNOT(dad == 0 || mother_moniker == father_moniker);
+	auto genome = world.loadGenome(mother_moniker);
+	THROW_IFNOT(genome && genome->getVersion() == engine.version);
+	const auto child_moniker = world.history->newMoniker(genome);
+	auto output = createUserGeneticsFile(child_moniker + ".gen");
+	output << *genome;
+	output.flush();
+	int32_t child_token;
+	std::memcpy(&child_token, child_moniker.data(), sizeof(child_token));
+	destination->setInt(child_token);
 }
 
 /* vim: set noet: */
