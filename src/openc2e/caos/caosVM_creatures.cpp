@@ -107,6 +107,18 @@ void routeLegacyStimulus(Agent* source, LegacyStimulusRoute route, ApplyStimulus
 	}
 }
 
+template <typename ApplyStimulus>
+void routeC2EStimulus(Agent* source, LegacyStimulusRoute route, ApplyStimulus apply) {
+	if (!source)
+		return;
+	for (const auto& agent : world.agents) {
+		if (!agent || !receivesLegacyStimulus(source, agent.get(), route))
+			continue;
+		if (c2eCreature* creature = getc2eCreature(agent.get()))
+			apply(creature);
+	}
+}
+
 void readCustomStimulus(caosVM* vm, int& significance, int& input, int& intensity, int& features, int chemicals[4], int amounts[4]) {
 	VM_PARAM_INTEGER(amount3)
 	VM_PARAM_INTEGER(chemical3)
@@ -206,10 +218,12 @@ void c_STM_WRIT(caosVM* vm) {
 */
 void c_STIM_SHOU(caosVM* vm) {
 	VM_VERIFY_SIZE(3)
-	VM_PARAM_FLOAT_UNUSED(strength)
-	VM_PARAM_INTEGER_UNUSED(stimulus)
-
-	// TODO
+	VM_PARAM_FLOAT(strength)
+	VM_PARAM_INTEGER(stimulus)
+	valid_agent(vm->owner);
+	routeC2EStimulus(vm->owner.get(), LegacyStimulusRoute::heard, [stimulus, strength](c2eCreature* creature) {
+		creature->handleStimulus(static_cast<unsigned int>(stimulus), strength);
+	});
 }
 
 /**
@@ -220,10 +234,12 @@ void c_STIM_SHOU(caosVM* vm) {
 */
 void c_STIM_SIGN(caosVM* vm) {
 	VM_VERIFY_SIZE(3)
-	VM_PARAM_FLOAT_UNUSED(strength)
-	VM_PARAM_INTEGER_UNUSED(stimulus)
-
-	// TODO
+	VM_PARAM_FLOAT(strength)
+	VM_PARAM_INTEGER(stimulus)
+	valid_agent(vm->owner);
+	routeC2EStimulus(vm->owner.get(), LegacyStimulusRoute::seen, [stimulus, strength](c2eCreature* creature) {
+		creature->handleStimulus(static_cast<unsigned int>(stimulus), strength);
+	});
 }
 
 /**
@@ -234,10 +250,12 @@ void c_STIM_SIGN(caosVM* vm) {
 */
 void c_STIM_TACT(caosVM* vm) {
 	VM_VERIFY_SIZE(3)
-	VM_PARAM_FLOAT_UNUSED(strength)
-	VM_PARAM_INTEGER_UNUSED(stimulus)
-
-	// TODO
+	VM_PARAM_FLOAT(strength)
+	VM_PARAM_INTEGER(stimulus)
+	valid_agent(vm->owner);
+	routeC2EStimulus(vm->owner.get(), LegacyStimulusRoute::touched, [stimulus, strength](c2eCreature* creature) {
+		creature->handleStimulus(static_cast<unsigned int>(stimulus), strength);
+	});
 }
 
 /**
