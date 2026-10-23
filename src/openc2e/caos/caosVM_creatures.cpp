@@ -18,6 +18,7 @@
  */
 
 #include "AgentHelpers.h"
+#include "Bubble.h"
 #include "Engine.h"
 #include "Map.h"
 #include "World.h"
@@ -1834,14 +1835,15 @@ void c_INJR(caosVM* vm) {
 
 /**
  SAY$ (command) string (string)
- %status stub
+ %status maybe
  %variants c1 c2
 */
 void c_SAY(caosVM* vm) {
-	VM_PARAM_STRING_UNUSED(string)
-
-	valid_agent(vm->targ);
-	// TODO
+	VM_PARAM_STRING(string)
+	Creature* creature = vm->getTargCreature();
+	if (!creature->isAlive() || creature->isAsleep())
+		return;
+	Bubble::newBubble(vm->targ.get(), true, string);
 }
 
 /**

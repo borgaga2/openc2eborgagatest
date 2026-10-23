@@ -5,6 +5,7 @@
 #include "common/io/SpanReader.h"
 #include "common/io/StringWriter.h"
 #include "common/io/VectorWriter.h"
+#include "openc2e/Bubble.h"
 #include "fileformats/C2EggFile.h"
 #include "fileformats/genomeFile.h"
 #include "openc2e/Engine.h"
@@ -211,6 +212,15 @@ outv mins)");
 		(void)run_c2_agent_script("targ ownr done");
 		if (creature->getDecisionId() != -1)
 			throw Exception("C2 DONE did not clear the current decision");
+		(void)run_c2_agent_script("targ ownr say$ \"playcheck\"");
+		bool found_speech_bubble = false;
+		for (const auto& candidate : world.agents) {
+			auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
+			if (bubble && bubble->getText() == "playcheck")
+				found_speech_bubble = true;
+		}
+		if (!found_speech_bubble)
+			throw Exception("C2 SAY$ did not create the requested speech bubble");
 		const float walk_start_x = newborn->x;
 		agent->setDirection(2);
 		agent->startWalking();

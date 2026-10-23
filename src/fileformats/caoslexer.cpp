@@ -154,7 +154,7 @@ start:
 	// bareword. this seems a little over-permissive, which characters exactly should we allow?
 	else if (is_ascii_alpha(p[0]) || (p[0] == '_' && is_ascii_alpha(p[1]))) {
 		p++;
-		while (is_ascii_alnum(p[0]) || p[0] == '_' || p[0] == '-' || p[0] == ':' || p[0] == '+' || p[0] == '#' || p[0] == '!' || p[0] == '*') {
+		while (is_ascii_alnum(p[0]) || p[0] == '_' || p[0] == '-' || p[0] == ':' || p[0] == '+' || p[0] == '#' || p[0] == '!' || p[0] == '*' || p[0] == '$') {
 			p++;
 		}
 		push_value(caostoken::TOK_WORD);

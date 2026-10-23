@@ -122,6 +122,16 @@ TEST(lexcaos, multiple_lines) {
 		});
 }
 
+TEST(lexcaos, dollar_suffix_in_command_name) {
+	assert_lexcaos("say$ \"hello\"",
+		{
+			{caostoken::TOK_WORD, "say$", 1},
+			{caostoken::TOK_WHITESPACE, " ", 1},
+			{caostoken::TOK_STRING, "\"hello\"", 1},
+			{caostoken::TOK_EOI, 1},
+		});
+}
+
 TEST(lexcaos, numbers_and_whitespace) {
 	assert_lexcaos("42 3.14 -7 .5 -.25",
 		{
