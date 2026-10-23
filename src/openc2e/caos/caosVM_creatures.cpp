@@ -1664,12 +1664,16 @@ void c_WALK(caosVM* vm) {
 
 /**
  DONE (command)
- %status stub
+ %status maybe
  %variants c1 c2 cv c3
 */
 void c_DONE(caosVM* vm) {
-	vm->getTargCreature();
-	// TODO
+	Creature* creature = vm->getTargCreature();
+	oldCreature* legacy = dynamic_cast<oldCreature*>(creature);
+	if (legacy)
+		legacy->finishDecisionAction();
+	else
+		creature->finishDecisionAction();
 }
 
 /**
@@ -1684,14 +1688,14 @@ void c_SAYN(caosVM* vm) {
 
 /**
  IMPT (command) nudge (integer)
- %status stub
+ %status maybe
  %variants c1 c2
 */
 void c_IMPT(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(nudge)
-
-	// TODO: check for creature targ?
-	// TODO
+	VM_PARAM_INTEGER(nudge)
+	oldCreature* creature = dynamic_cast<oldCreature*>(vm->getTargCreature());
+	THROW_IFNOT(creature);
+	creature->nudgeDecisionImportance(nudge);
 }
 
 /**

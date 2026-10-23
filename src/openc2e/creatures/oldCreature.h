@@ -72,6 +72,8 @@ class oldCreature : public Creature {
 
 	void handleStimulus(unsigned int id);
 	void handleStimulus(unsigned int input, unsigned int intensity, const int chemicals[4], const int amounts[4]);
+	void nudgeDecisionImportance(int nudge);
+	void finishDecisionAction() override;
 
 	oldBrain* getBrain() { return brain; }
 

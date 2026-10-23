@@ -109,6 +109,7 @@ class Creature {
 	AgentRef getAttentionFocus() { return attention; }
 	int getAttentionId() { return attn; }
 	int getDecisionId() { return decn; }
+	virtual void finishDecisionAction();
 
 	virtual unsigned int getGait() = 0;
 

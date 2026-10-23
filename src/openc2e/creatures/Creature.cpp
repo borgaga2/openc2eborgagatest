@@ -93,6 +93,10 @@ bool Creature::shouldProcessGene(gene* g) {
 	return true;
 }
 
+void Creature::finishDecisionAction() {
+	decn = -1;
+}
+
 void Creature::processGenes() {
 	for (auto& gene : genome->genes) {
 		if (shouldProcessGene(gene.get()))

@@ -20,6 +20,7 @@
 #include "openc2e/historyManager.h"
 #include "sdlbackend/SDLMixerBackend.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -195,6 +196,21 @@ outv mins)");
 		check_elapsed_clock(0, "0:0");
 		check_elapsed_clock(20 * 60 * 60 - 1, "0:59");
 		check_elapsed_clock(20 * 60 * 60, "1:0");
+		const int decision = creature->getDecisionId();
+		if (decision >= 0) {
+			auto* decision_lobe = creature->getBrain()->getLobeByTissue(6);
+			if (!decision_lobe || static_cast<unsigned int>(decision) >= decision_lobe->getNoNeurons())
+				throw Exception("C2 creature reported an invalid decision neuron");
+			auto* decision_neuron = decision_lobe->getNeuron(static_cast<unsigned int>(decision));
+			const unsigned char initial_state = decision_neuron->state;
+			(void)run_c2_agent_script("targ ownr impt 7");
+			const auto expected_state = static_cast<unsigned char>(std::min(255, static_cast<int>(initial_state) + 7));
+			if (decision_neuron->state != expected_state)
+				throw Exception("C2 IMPT did not nudge the current decision neuron");
+		}
+		(void)run_c2_agent_script("targ ownr done");
+		if (creature->getDecisionId() != -1)
+			throw Exception("C2 DONE did not clear the current decision");
 		const float walk_start_x = newborn->x;
 		agent->setDirection(2);
 		agent->startWalking();

@@ -509,6 +509,32 @@ void oldCreature::handleStimulus(unsigned int input, unsigned int intensity, con
 	}
 }
 
+void oldCreature::nudgeDecisionImportance(int nudge) {
+	if (nudge <= 0 || !brain || decn < 0)
+		return;
+
+	oldLobe* decisions = brain->getLobeByTissue(6);
+	if (!decisions || static_cast<unsigned int>(decn) >= decisions->getNoNeurons())
+		return;
+
+	oldNeuron* decision = decisions->getNeuron(static_cast<unsigned int>(decn));
+	const unsigned int state = static_cast<unsigned int>(decision->state) + static_cast<unsigned int>(nudge);
+	decision->state = static_cast<unsigned char>(std::min(state, 255u));
+}
+
+void oldCreature::finishDecisionAction() {
+	if (brain && decn >= 0) {
+		oldLobe* decisions = brain->getLobeByTissue(6);
+		if (decisions && static_cast<unsigned int>(decn) < decisions->getNoNeurons()) {
+			oldNeuron* decision = decisions->getNeuron(static_cast<unsigned int>(decn));
+			decision->state = 0;
+			decision->output = 0;
+		}
+	}
+	// Force the next brain tick to issue a fresh voluntary decision.
+	Creature::finishDecisionAction();
+}
+
 void c2eCreature::handleStimulus(c2eStim& stim) {
 	// TODO: handle out-of-range verb_amount/noun_amount
 
