@@ -1058,7 +1058,7 @@ bool Engine::initialSetup() {
 		OPENC2E_DEFAULT_HEIGHT);
 	setBackend(b);
 	possible_backends.clear();
-	if (!cmdline_norun)
+	if (preferred_backend != "null")
 		Openc2eImGui::Init();
 
 	if (cmdline_norun)
