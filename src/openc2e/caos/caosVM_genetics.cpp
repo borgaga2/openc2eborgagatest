@@ -82,10 +82,12 @@ void c_GENE_CROS(caosVM* vm) {
  Delete a genome from a slot.
 */
 void c_GENE_KILL(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(slot)
+	VM_PARAM_INTEGER(slot)
 	VM_PARAM_VALIDAGENT(agent)
 
-	// TODO
+	auto genome = agent->genome_slots.find(slot);
+	THROW_IFNOT(genome != agent->genome_slots.end());
+	agent->genome_slots.erase(genome);
 }
 
 /**
