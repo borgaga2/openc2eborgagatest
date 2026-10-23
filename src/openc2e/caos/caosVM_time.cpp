@@ -58,6 +58,28 @@ void v_BUZZ(caosVM* vm) {
 }
 
 /**
+ HOUR (integer)
+ %status maybe
+ %variants c1 c2
+
+ Returns the number of game hours elapsed since game start.
+*/
+void v_HOUR(caosVM* vm) {
+	vm->result.setInt(world.worldtickcount / (20 * 60 * 60));
+}
+
+/**
+ MINS (integer)
+ %status maybe
+ %variants c1 c2
+
+ Returns the minutes component of game time elapsed since game start.
+*/
+void v_MINS(caosVM* vm) {
+	vm->result.setInt((world.worldtickcount / (20 * 60)) % 60);
+}
+
+/**
  DATE (integer)
  %status maybe
 

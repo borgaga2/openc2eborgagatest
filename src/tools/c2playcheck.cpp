@@ -181,6 +181,19 @@ int main(int argc, char** argv) {
 		const auto timer_remaining = run_c2_agent_script("outv tick");
 		if (timer_remaining != "5")
 			throw Exception(fmt::format("C2 TICK returned {} after 3 world ticks, expected 5", timer_remaining));
+		const auto saved_world_tick = world.worldtickcount;
+		const auto check_elapsed_clock = [&](unsigned int ticks, const std::string& expected) {
+			world.worldtickcount = ticks;
+			const auto actual = run_c2_agent_script(R"(outv hour
+outs ":"
+outv mins)");
+			world.worldtickcount = saved_world_tick;
+			if (actual != expected)
+				throw Exception(fmt::format("C2 HOUR/MINS returned {} at world tick {}, expected {}", actual, ticks, expected));
+		};
+		check_elapsed_clock(0, "0:0");
+		check_elapsed_clock(20 * 60 * 60 - 1, "0:59");
+		check_elapsed_clock(20 * 60 * 60, "1:0");
 		const auto start_age = creature->getAge();
 		const auto start_brain_ticks = creature->getBrain()->getTicks();
 		for (unsigned int i = 0; i < 3600; ++i) {
