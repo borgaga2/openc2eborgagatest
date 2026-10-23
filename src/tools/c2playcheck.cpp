@@ -15,6 +15,7 @@
 #include "openc2e/PointerAgent.h"
 #include "openc2e/PathResolver.h"
 #include "openc2e/Room.h"
+#include "openc2e/SimpleAgent.h"
 #include "openc2e/World.h"
 #include "openc2e/caosScript.h"
 #include "openc2e/caosVM.h"
@@ -187,6 +188,33 @@ int main(int argc, char** argv) {
 		const auto timer_remaining = run_c2_agent_script("outv tick");
 		if (timer_remaining != "5")
 			throw Exception(fmt::format("C2 TICK returned {} after 3 world ticks, expected 5", timer_remaining));
+		auto* enum_first = new SimpleAgent(254, 254, 65534, 0, "a00a", 0, 1);
+		enum_first->finishInit();
+		AgentRef enum_first_ref(enum_first);
+		auto* enum_second = new SimpleAgent(254, 254, 65534, 0, "a00a", 0, 1);
+		enum_second->finishInit();
+		AgentRef enum_second_ref(enum_second);
+		caosScript enum_script("c2", "<C2 stale enumeration check>");
+		enum_script.parse("enum 254 254 65534\nkill targ\nnext");
+		caosVM enum_vm(newborn);
+		if (!enum_vm.fireScript(enum_script.installer, false))
+			throw Exception("Could not start the C2 stale enumeration check script");
+		enum_vm.tick(); // Run ENUM, then pause at its normal script yield.
+		if (enum_vm.stopped())
+			throw Exception("The C2 stale enumeration check did not pause after collecting agents");
+		auto enum_first_hold = enum_first_ref.lock();
+		if (!enum_first_hold)
+			throw Exception("The C2 stale enumeration test agent disappeared before it was killed");
+		enum_first_hold->kill(); // Expire a weak reference already stored in the ENUM stack.
+		enum_first_hold.reset();
+		for (unsigned int i = 0; i < 20 && !enum_vm.stopped(); ++i) {
+			enum_vm.timeslice = 1;
+			enum_vm.tick();
+		}
+		if (!enum_vm.stopped())
+			throw Exception("The C2 stale enumeration check did not finish");
+		if (enum_first_ref.get() || enum_second_ref.get())
+			throw Exception("The C2 ENUM ... NEXT loop left a matching test agent alive");
 		const auto saved_world_tick = world.worldtickcount;
 		const auto check_elapsed_clock = [&](unsigned int ticks, const std::string& expected) {
 			world.worldtickcount = ticks;
@@ -396,3 +424,4 @@ outv mins)");
 		return 1;
 	}
 }
+
