@@ -64,6 +64,7 @@ class c2eOrgan {
 	std::vector<std::shared_ptr<c2eReaction> > reactions;
 	std::vector<c2eReceptor> receptors;
 	std::vector<c2eEmitter> emitters;
+	size_t processedGeneCount = 0;
 
 	// data
 	float energycost, atpdamagecoefficient;

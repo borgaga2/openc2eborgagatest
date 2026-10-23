@@ -166,6 +166,7 @@ class c2Organ {
 	std::vector<std::shared_ptr<c2Reaction> > reactions;
 	std::vector<c2Receptor> receptors;
 	std::vector<c2Emitter> emitters;
+	size_t processedGeneCount = 0;
 
 	// data
 	unsigned char energycost, atpdamagecoefficient;

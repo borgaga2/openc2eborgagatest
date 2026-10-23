@@ -494,7 +494,8 @@ void c2Organ::processGenes() {
 	// TODO: is genes.size() always the size we want?
 	energycost = 2 + (genes.size() / 10);
 
-	for (auto g : genes) {
+	for (; processedGeneCount < genes.size(); processedGeneCount++) {
+		gene* g = genes[processedGeneCount];
 		if (typeid(*g) == typeid(bioReactionGene)) {
 			reactions.push_back(std::shared_ptr<c2Reaction>(new c2Reaction((bioReactionGene*)g)));
 		} else if (typeid(*g) == typeid(bioEmitterGene)) {
@@ -510,7 +511,8 @@ void c2eOrgan::processGenes() {
 	energycost = (1.0f / 128.0f) + genes.size() * (0.1f / 255.0f);
 
 	// TODO: should this cope with receptors created at other lifestages? i doubt it.. - fuzzie
-	for (auto g : genes) {
+	for (; processedGeneCount < genes.size(); processedGeneCount++) {
+		gene* g = genes[processedGeneCount];
 		if (typeid(*g) == typeid(bioReactionGene)) {
 			reactions.push_back(std::shared_ptr<c2eReaction>(new c2eReaction((bioReactionGene*)g)));
 		} else if (typeid(*g) == typeid(bioEmitterGene)) {
