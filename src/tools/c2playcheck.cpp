@@ -3,6 +3,7 @@
 #include "common/io/FileReader.h"
 #include "common/io/FileWriter.h"
 #include "common/io/SpanReader.h"
+#include "common/io/StringWriter.h"
 #include "common/io/VectorWriter.h"
 #include "fileformats/C2EggFile.h"
 #include "fileformats/genomeFile.h"
@@ -11,6 +12,8 @@
 #include "openc2e/PathResolver.h"
 #include "openc2e/Room.h"
 #include "openc2e/World.h"
+#include "openc2e/caosScript.h"
+#include "openc2e/caosVM.h"
 #include "openc2e/creatures/CreatureAgent.h"
 #include "openc2e/creatures/oldBrain.h"
 #include "openc2e/creatures/oldCreature.h"
@@ -157,6 +160,27 @@ int main(int argc, char** argv) {
 		const auto* genus = dynamic_cast<const creatureGenusGene*>(creature->getGenome()->getGene(2, 1, 1));
 		if (!genus || genus->mum != mother_moniker || genus->dad != father_moniker)
 			throw Exception("The crossed genome did not preserve both parent monikers");
+		const auto run_c2_agent_script = [&](const std::string& source) {
+			caosScript script("c2", "<C2 gameplay check>");
+			script.parse(source);
+			caosVM vm(newborn);
+			StringWriter output;
+			vm.outputstream = &output;
+			struct reset_output_stream {
+				caosVM& vm;
+				~reset_output_stream() { vm.outputstream = nullptr; }
+			} reset{vm};
+			vm.runEntirely(script.installer);
+			return output.string();
+		};
+		const auto timer_start = run_c2_agent_script("tick 8\noutv tick");
+		if (timer_start != "8")
+			throw Exception(fmt::format("C2 TICK returned {} after setting an 8-tick timer, expected 8", timer_start));
+		for (unsigned int i = 0; i < 3; ++i)
+			engine.update();
+		const auto timer_remaining = run_c2_agent_script("outv tick");
+		if (timer_remaining != "5")
+			throw Exception(fmt::format("C2 TICK returned {} after 3 world ticks, expected 5", timer_remaining));
 		const auto start_age = creature->getAge();
 		const auto start_brain_ticks = creature->getBrain()->getTicks();
 		for (unsigned int i = 0; i < 3600; ++i) {
