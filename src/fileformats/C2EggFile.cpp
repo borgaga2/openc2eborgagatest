@@ -31,9 +31,15 @@ C2EggFile C2EggFile::read(Reader& input) {
 	egg.father_moniker.resize(4);
 	reader.read(egg.mother_moniker.data(), 4);
 	reader.read(egg.father_moniker.data(), 4);
+	while (!egg.mother_moniker.empty() && egg.mother_moniker.back() == '\0')
+		egg.mother_moniker.pop_back();
 	const bool has_father = std::any_of(egg.father_moniker.begin(), egg.father_moniker.end(), [](char c) { return c != 0; });
-	if (!has_father)
+	if (has_father) {
+		while (!egg.father_moniker.empty() && egg.father_moniker.back() == '\0')
+			egg.father_moniker.pop_back();
+	} else {
 		egg.father_moniker.clear();
+	}
 	auto read_blob = [&]() {
 		const auto size = read32le(reader);
 		if (size > bytes.size() - reader.tell())
