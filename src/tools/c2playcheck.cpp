@@ -181,6 +181,52 @@ int main(int argc, char** argv) {
 			vm.runEntirely(script.installer);
 			return output.string();
 		};
+		const float saved_obsv_x = newborn->x;
+		const float saved_obsv_y = newborn->y;
+		const int saved_obsv_size = newborn->size;
+		bool checked_obsv_door = false;
+		for (unsigned int room_id = 0; room_id < world.map->getRoomCount() && !checked_obsv_door; ++room_id) {
+			auto source_room = world.map->getRoom(room_id);
+			if (!source_room)
+				continue;
+			for (const auto& [destination_room, door] : source_room->getDoors()) {
+				(void)door;
+				if (source_room->x_right != destination_room->x_left || source_room->x_right <= newborn->getWidth() + 1)
+					continue;
+				const unsigned int first_y = std::max({source_room->y_left_ceiling, source_room->y_right_ceiling, destination_room->y_left_ceiling, destination_room->y_right_ceiling}) + newborn->getHeight();
+				const unsigned int last_y = std::min({source_room->y_left_floor, source_room->y_right_floor, destination_room->y_left_floor, destination_room->y_right_floor}) - newborn->getHeight();
+				if (first_y >= last_y)
+					continue;
+				for (unsigned int boundary_y = first_y; boundary_y <= last_y; ++boundary_y) {
+					if (!source_room->containsPoint(source_room->x_right - 1, boundary_y) || !destination_room->containsPoint(destination_room->x_left + 1, boundary_y))
+						continue;
+					const int saved_door_perm = world.map->getDoorPerm(source_room, destination_room);
+					world.map->setDoorPerm(source_room, destination_room, 37);
+					newborn->size = 38;
+					newborn->moveTo(static_cast<float>(source_room->x_right - newborn->getWidth() - 1), static_cast<float>(boundary_y - newborn->getHeight() / 2), true);
+					std::string observed_door_perm;
+					try {
+						observed_door_perm = run_c2_agent_script("outv obsv 1");
+					} catch (...) {
+						world.map->setDoorPerm(source_room, destination_room, saved_door_perm);
+						newborn->size = saved_obsv_size;
+						newborn->moveTo(saved_obsv_x, saved_obsv_y, true);
+						throw;
+					}
+					world.map->setDoorPerm(source_room, destination_room, saved_door_perm);
+					newborn->size = saved_obsv_size;
+					newborn->moveTo(saved_obsv_x, saved_obsv_y, true);
+					if (observed_door_perm != "37")
+						throw Exception(fmt::format("C2 OBSV returned {} for a blocked door with permeability 37", observed_door_perm));
+					checked_obsv_door = true;
+					break;
+				}
+				if (checked_obsv_door)
+					break;
+			}
+		}
+		if (!checked_obsv_door)
+			throw Exception("Could not find a horizontal C2 room door to check OBSV against");
 		const auto timer_start = run_c2_agent_script("tick 8\noutv tick");
 		if (timer_start != "8")
 			throw Exception(fmt::format("C2 TICK returned {} after setting an 8-tick timer, expected 8", timer_start));
