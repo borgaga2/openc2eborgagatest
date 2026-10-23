@@ -79,7 +79,7 @@ void oldCreature::tickBrain() {
 	}
 
 	// TODO
-	if (parentagent->vmStopped() || oldattn != attention || olddecn != decn) {
+	if (decn >= 0 && (parentagent->vmStopped() || oldattn != attention || olddecn != decn)) {
 		// TODO
 		parentagent->queueScript(decn + 16); // Extra scripts
 	}
@@ -167,8 +167,8 @@ void c2eCreature::tickBrain() {
 
 	c2eLobe* decnlobe = brain->getLobeById("decn");
 	if (decnlobe) {
-		// TODO: check bounds of mappinginfo
-		decn = mappinginfo[decnlobe->getSpareNeuron()];
+		const unsigned int neuron = decnlobe->getSpareNeuron();
+		decn = neuron < mappinginfo.size() ? mappinginfo[neuron] : -1;
 	}
 
 	// TODO: doesn't belong here
@@ -182,7 +182,7 @@ void c2eCreature::tickBrain() {
 	// TODO: doesn't belong here
 	// TODO: deal with decisions which don't have agents attached
 	// TODO: deal with moving between ATTNs which don't have a choseagent right now (eg, nothing in sight)
-	if (parentagent->vmStopped() || oldattn != attention || olddecn != decn) {
+	if (decn >= 0 && (parentagent->vmStopped() || oldattn != attention || olddecn != decn)) {
 		if (attention && dynamic_cast<CreatureAgent*>(attention.get())) {
 			parentagent->queueScript(decn + 32); // 'on creatures'
 		} else {
