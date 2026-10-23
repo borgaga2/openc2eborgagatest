@@ -125,6 +125,7 @@ class oldBrain {
 	std::vector<oldLobe*> lobes;
 
 	oldBrain(oldCreature* p);
+	~oldBrain();
 	void tick();
 	void processGenes();
 	void init();

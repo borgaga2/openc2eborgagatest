@@ -57,6 +57,8 @@ class oldCreature : public Creature {
 	AgentRef selectRepresentativeAgent(int type, std::vector<AgentRef> possibles);
 
   public:
+	~oldCreature() override;
+
 	// TODO: inline?
 	unsigned int calculateTickMask(unsigned char);
 	unsigned int calculateMultiplier(unsigned char);

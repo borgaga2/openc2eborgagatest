@@ -898,6 +898,11 @@ oldBrain::oldBrain(oldCreature* p) {
 	ticks = 0;
 }
 
+oldBrain::~oldBrain() {
+	for (oldLobe* lobe : lobes)
+		delete lobe;
+}
+
 // helper function for below
 unsigned int minimumLobeSize(unsigned int version, unsigned int lobeid) {
 	switch (lobeid) {

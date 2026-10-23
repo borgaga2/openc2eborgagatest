@@ -234,6 +234,10 @@ oldCreature::oldCreature(std::shared_ptr<genomeFile> g, bool is_female, unsigned
 	brain = 0; // just in case
 }
 
+oldCreature::~oldCreature() {
+	delete brain;
+}
+
 c1Creature::c1Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a)
 	: oldCreature(g, is_female, _variant, a) {
 	assert(g->getVersion() == 1);
