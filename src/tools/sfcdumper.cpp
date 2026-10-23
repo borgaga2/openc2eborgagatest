@@ -4,18 +4,22 @@
 #include "fileformats/MFCWriter.h"
 #include "fileformats/sfc/C2MapData.h"
 #include "fileformats/sfc/C2ObjectData.h"
+#include "fileformats/sfc/C2ScriptState.h"
 #include "fileformats/sfc/SFCFile.h"
 
 #include <algorithm>
 #include <fmt/core.h>
 
-static int check_c2_map(const char* filename, bool include_objects = false) {
+enum class C2Section { Map, Objects, Macros };
+
+static int check_c2_archive(const char* filename, C2Section section) {
 	FileReader file(filename);
 	auto bytes = file.read_to_end();
 	SpanReader in(bytes);
 	MFCReader reader(in);
 	sfc::register_c2_map_classes(reader);
 	sfc::register_c2_object_classes(reader);
+	sfc::register_c2_macro_class(reader);
 	std::shared_ptr<sfc::MapDataV2> map;
 	reader(map);
 	if (!map)
@@ -24,8 +28,9 @@ static int check_c2_map(const char* filename, bool include_objects = false) {
 	MFCWriter writer(out);
 	sfc::register_c2_map_classes(writer);
 	sfc::register_c2_object_classes(writer);
+	sfc::register_c2_macro_class(writer);
 	writer(map);
-	if (include_objects) {
+	if (section != C2Section::Map) {
 		// The legacy loader skips this zero-filled region after the map.
 		// Preserve it verbatim while checking the following object section;
 		// its interpretation is still needed for full world serialization.
@@ -72,19 +77,30 @@ static int check_c2_map(const char* filename, bool include_objects = false) {
 			script.serialize(writer);
 		fmt::print("C2 objects: {}, sceneries: {}, scripts: {}\n", objects.size(), sceneries.size(), scripts.size());
 	}
+	if (section == C2Section::Macros) {
+		sfc::ScriptStateV2 state;
+		state.serialize(reader);
+		state.serialize(writer);
+		const auto active = std::count_if(state.macros.begin(), state.macros.end(), [](const auto& macro) { return macro != nullptr; });
+		fmt::print("C2 running scripts: {}, macro slots: {}, speech entries: {}\n", active, state.macros.size(), state.speech_history.size());
+		fmt::print("Remaining bytes after macros: {}\n", bytes.size() - in.tell());
+	}
 	const auto& encoded = out.vector();
 	const bool exact = encoded.size() == in.tell() && std::equal(encoded.begin(), encoded.end(), bytes.begin());
-	fmt::print("C2 {}: {} room slots, {} bytes; exact read/write round trip: {}\n", include_objects ? "map and objects" : "map", map->rooms.size(), in.tell(), exact);
+	const char* label = section == C2Section::Map ? "map" : section == C2Section::Objects ? "map and objects" : "map, objects and macros";
+	fmt::print("C2 {}: {} room slots, {} bytes; exact read/write round trip: {}\n", label, map->rooms.size(), in.tell(), exact);
 	return exact ? 0 : 1;
 }
 
 int main(int argc, char** argv) try {
 	if (argc == 3 && strcmp(argv[1], "--c2-map") == 0)
-		return check_c2_map(argv[2]);
+		return check_c2_archive(argv[2], C2Section::Map);
 	if (argc == 3 && strcmp(argv[1], "--c2-objects") == 0)
-		return check_c2_map(argv[2], true);
+		return check_c2_archive(argv[2], C2Section::Objects);
+	if (argc == 3 && strcmp(argv[1], "--c2-macros") == 0)
+		return check_c2_archive(argv[2], C2Section::Macros);
 	if (argc != 2 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
-		fmt::print(stderr, "USAGE: {} FILE\n       {} --c2-map FILE\n       {} --c2-objects FILE\n", argv[0], argv[0], argv[0]);
+		fmt::print(stderr, "USAGE: {} FILE\n       {} --c2-map FILE\n       {} --c2-objects FILE\n       {} --c2-macros FILE\n", argv[0], argv[0], argv[0], argv[0]);
 		return 1;
 	}
 
