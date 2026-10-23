@@ -158,6 +158,14 @@ class Agent : public std::enable_shared_from_this<Agent> {
 	bool cr_can_hit : 1;
 	bool cr_can_eat : 1;
 	bool cr_can_pickup : 1;
+	void setC2TouchBehavior(unsigned int touch) {
+		cr_can_push = (touch & 1) != 0;
+		cr_can_pull = (touch & 2) != 0;
+		cr_can_stop = (touch & 4) != 0;
+		cr_can_hit = (touch & 8) != 0;
+		cr_can_eat = (touch & 64) != 0;
+		cr_can_pickup = false;
+	}
 	// imsk
 	bool imsk_key_down : 1;
 	bool imsk_key_up : 1;

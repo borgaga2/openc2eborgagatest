@@ -1087,7 +1087,9 @@ void SFCSimpleObject::copyToWorld() {
 	DullPart* p = (DullPart*)a->part(0);
 	copyEntityData(entity, p);
 
-	// TODO: bhvr
+	// SFC objects store the creature touch behavior as a bitmask, matching
+	// the C1/C2 BHVR command.
+	a->setC2TouchBehavior(bhvrtouch);
 
 	// pickup handles/points
 	for (unsigned int i = 0; i < pickup_handles.size(); i++) {

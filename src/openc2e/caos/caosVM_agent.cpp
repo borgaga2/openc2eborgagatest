@@ -1910,7 +1910,7 @@ void c_SLIM(caosVM*) {
  %variants c1 c2
 */
 void c_BHVR_c2(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(touch)
+	VM_PARAM_INTEGER(touch)
 	VM_PARAM_INTEGER(click)
 
 	valid_agent(vm->targ);
@@ -1953,7 +1953,7 @@ void c_BHVR_c2(caosVM* vm) {
 			throw Exception(fmt::format("silly BHVR click value: {}", click));
 	}
 
-	// TODO
+	vm->targ->setC2TouchBehavior(static_cast<unsigned int>(touch));
 }
 
 /**
