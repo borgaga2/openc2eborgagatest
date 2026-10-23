@@ -31,16 +31,22 @@
 #include <fmt/core.h>
 #include <memory>
 
-#define CAOS_LVALUE_TARG_ROOM(name, check, get, set) \
-	CAOS_LVALUE_TARG(name, \
-					 std::shared_ptr<Room> r = roomContainingAgent(vm->targ); \
-					 THROW_IFNOT(r); \
-					 check, \
-					 get, \
-					 set)
-
 #define CAOS_LVALUE_ROOM_SIMPLE(name, expr) \
-	CAOS_LVALUE_TARG_ROOM(name, (void)0, expr, expr = newvalue)
+	void v_##name(caosVM* vm) { \
+		std::shared_ptr<Room> r = roomContainingAgent(vm->targ); \
+		if (!r) { \
+			/* Agents can be outside room bounds; these fields default to zero there. */ \
+			vm->valueStack.push_back(caosValue(0)); \
+			return; \
+		} \
+		vm->valueStack.push_back(caosValue(expr)); \
+	} \
+	void s_##name(caosVM* vm) { \
+		std::shared_ptr<Room> r = roomContainingAgent(vm->targ); \
+		VM_PARAM_INTEGER(newvalue) \
+		if (r) \
+			expr = newvalue; \
+	}
 
 /**
  ADDM (integer) x (integer) y (integer) width (integer) height (integer) background (string)
@@ -936,8 +942,7 @@ CAOS_LVALUE_ROOM_SIMPLE(PSRC, r->psrc)
 void v_WNDX(caosVM* vm) {
 	valid_agent(vm->targ);
 	std::shared_ptr<Room> r = roomContainingAgent(vm->targ);
-	THROW_IFNOT(r);
-	vm->result.setInt(r->windx);
+	vm->result.setInt(r ? r->windx : 0);
 }
 
 /**
@@ -948,8 +953,7 @@ void v_WNDX(caosVM* vm) {
 void v_WNDY(caosVM* vm) {
 	valid_agent(vm->targ);
 	std::shared_ptr<Room> r = roomContainingAgent(vm->targ);
-	THROW_IFNOT(r);
-	vm->result.setInt(r->windy);
+	vm->result.setInt(r ? r->windy : 0);
 }
 
 /**
