@@ -21,9 +21,11 @@
 #include "Bubble.h"
 #include "Engine.h"
 #include "Map.h"
+#include "PathResolver.h"
 #include "World.h"
 #include "caosVM.h"
 #include "common/Random.h"
+#include "common/io/FileWriter.h"
 #include "common/throw_ifnot.h"
 #include "creatures/CompoundCreature.h"
 #include "creatures/SkeletalCreature.h"
@@ -1376,16 +1378,53 @@ void c_LTCY(caosVM* vm) {
 /**
  MATE (command)
  %variants c2 cv c3
- %status stub
+ %status maybe
 */
 void c_MATE(caosVM* vm) {
-	vm->getTargCreature();
+	Creature* male_creature = vm->getTargCreature();
 	THROW_IFNOT(vm->_it_);
-	CreatureAgent* t = dynamic_cast<CreatureAgent*>(vm->_it_.get());
-	THROW_IFNOT(t);
-	t->getCreature();
+	CreatureAgent* female_agent = dynamic_cast<CreatureAgent*>(vm->_it_.get());
+	THROW_IFNOT(female_agent);
+	Creature* female_creature = female_agent->getCreature();
 
-	// TODO
+	// C2 stores reproductive state in byte-valued loci. MATE is deliberately
+	// a no-op for ineligible pairs, as it is an attempted behavior rather than
+	// a script error.
+	auto* male = dynamic_cast<c2Creature*>(male_creature);
+	auto* female = dynamic_cast<c2Creature*>(female_creature);
+	if (!male || !female || !male->isAlive() || !female->isAlive() || male->isFemale() || !female->isFemale() || male->getGenus() != female->getGenus())
+		return;
+
+	unsigned char* male_fertile = male->getLocusPointer(true, 1, 2, 0);
+	unsigned char* female_fertile = female->getLocusPointer(true, 1, 2, 0);
+	unsigned char* female_receptive = female->getLocusPointer(true, 1, 2, 1);
+	unsigned char* female_pregnant = female->getLocusPointer(false, 1, 2, 1);
+	if (!male_fertile || !female_fertile || !female_receptive || !female_pregnant || !*male_fertile || !*female_fertile || !*female_receptive || *female_pregnant)
+		return;
+
+	// Receptivity is an 8-bit biochemical signal, so it also gives a natural
+	// conception probability (rather than making every MATE call succeed).
+	if (rand_int32(1, 255) > *female_receptive)
+		return;
+
+	const std::string mother_moniker = world.history->findMoniker(female->getGenome());
+	const std::string father_moniker = world.history->findMoniker(male->getGenome());
+	if (mother_moniker.empty() || father_moniker.empty())
+		return;
+
+	unsigned int crossover_points = 0;
+	auto child_genome = genomeFile::cross(*female->getGenome(), *male->getGenome(), mother_moniker, father_moniker, crossover_points);
+	const std::string child_moniker = world.history->newMoniker(child_genome);
+	auto genome_file = createUserGeneticsFile(child_moniker + ".gen");
+	genome_file << *child_genome;
+	genome_file.flush();
+	auto& child_history = world.history->getMoniker(child_moniker);
+	child_history.no_crossover_points = crossover_points;
+	child_history.addEvent(0, mother_moniker, father_moniker);
+	vm->_it_.get()->setSlot(1, child_genome);
+	*female_pregnant = 255;
+	if (auto* skeletal_female = dynamic_cast<SkeletalCreature*>(vm->_it_.get()))
+		skeletal_female->setPregnancy(1);
 }
 
 /**
@@ -2261,3 +2300,4 @@ void v_MTHX(caosVM* vm) {
 void v_MTHY(caosVM* vm) {
 	vm->result.setFloat(0); // TODO
 }
+

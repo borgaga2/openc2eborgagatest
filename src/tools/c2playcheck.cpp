@@ -20,6 +20,7 @@
 #include "openc2e/caosScript.h"
 #include "openc2e/caosVM.h"
 #include "openc2e/creatures/CreatureAgent.h"
+#include "openc2e/creatures/SkeletalCreature.h"
 #include "openc2e/creatures/oldBrain.h"
 #include "openc2e/creatures/oldCreature.h"
 #include "openc2e/historyManager.h"
@@ -414,6 +415,58 @@ outv mins)");
 		}
 		if (related_norns < 2)
 			throw Exception("The placed two-parent C2 egg did not hatch into a second living Norn within 3,600 ticks");
+		const auto clone_genome = [](const std::shared_ptr<genomeFile>& source) {
+			VectorWriter encoded;
+			encoded << *source;
+			SpanReader reader(encoded.vector());
+			auto clone = std::make_shared<genomeFile>();
+			reader >> *clone;
+			if (reader.has_data_left())
+				throw Exception("The C2 MATE check could not clone a parent genome");
+			return clone;
+		};
+		const auto create_mate_test_creature = [&](const std::shared_ptr<genomeFile>& source, bool is_female) {
+			auto parent_copy = clone_genome(source);
+			auto* skeletal = new SkeletalCreature(4);
+			try {
+				auto* c2 = new c2Creature(parent_copy, is_female, 0, skeletal);
+				skeletal->setCreature(c2);
+			} catch (...) {
+				delete skeletal;
+				throw;
+			}
+			skeletal->finishInit();
+			const std::string moniker = world.history->newMoniker(parent_copy);
+			world.history->getMoniker(moniker).moveToCreature(skeletal);
+			skeletal->getCreature()->born();
+			return AgentRef(skeletal);
+		};
+		auto mate_male_ref = create_mate_test_creature(father_genome, false);
+		auto mate_female_ref = create_mate_test_creature(genome, true);
+		auto* mate_male = dynamic_cast<c2Creature*>(dynamic_cast<CreatureAgent*>(mate_male_ref.get())->getCreature());
+		auto* mate_female = dynamic_cast<c2Creature*>(dynamic_cast<CreatureAgent*>(mate_female_ref.get())->getCreature());
+		auto* male_fertile = mate_male->getLocusPointer(true, 1, 2, 0);
+		auto* female_fertile = mate_female->getLocusPointer(true, 1, 2, 0);
+		auto* female_receptive = mate_female->getLocusPointer(true, 1, 2, 1);
+		if (!male_fertile || !female_fertile || !female_receptive)
+			throw Exception("The selected C2 genomes have no reproductive loci for the MATE check");
+		*male_fertile = 255;
+		*female_fertile = 255;
+		*female_receptive = 255;
+		caosScript mate_script("c2", "<C2 MATE check>");
+		mate_script.parse("mate");
+		caosVM mate_vm(mate_male_ref);
+		mate_vm.targ = mate_male_ref;
+		mate_vm._it_ = mate_female_ref;
+		mate_vm.runEntirely(mate_script.installer);
+		auto child_genome = mate_female_ref->getSlot(1);
+		if (!child_genome || child_genome->getVersion() != 2)
+			throw Exception("C2 MATE did not put the conceived genome in the mother's gene slot 1");
+		const auto* child_genus = dynamic_cast<const creatureGenusGene*>(child_genome->getGene(2, 1, 1));
+		if (!child_genus || child_genus->mum != world.history->findMoniker(mate_female->getGenome()) || child_genus->dad != world.history->findMoniker(mate_male->getGenome()))
+			throw Exception("C2 MATE did not preserve both parent monikers in the offspring genome");
+		if (*mate_female->getLocusPointer(false, 1, 2, 1) == 0)
+			throw Exception("C2 MATE did not set the mother's pregnancy locus");
 		fmt::print("C2 gameplay check passed: 3600 ticks, {} related living Norns, walked {} pixels, age {}, brain ticks {}, organs {}\n", related_norns, walked_pixels, creature->getAge(), creature->getBrain()->getTicks(), creature->noOrgans());
 		engine.shutdown();
 		return 0;
@@ -424,4 +477,5 @@ outv mins)");
 		return 1;
 	}
 }
+
 
