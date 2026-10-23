@@ -163,8 +163,10 @@ class Agent : public std::enable_shared_from_this<Agent> {
 		cr_can_pull = (touch & 2) != 0;
 		cr_can_stop = (touch & 4) != 0;
 		cr_can_hit = (touch & 8) != 0;
-		cr_can_eat = (touch & 64) != 0;
-		cr_can_pickup = false;
+		// C2 save data uses 64 for eating; accept the later 16-bit flag too,
+		// since some shared C1/C2 scripts use that encoding.
+		cr_can_eat = (touch & (16 | 64)) != 0;
+		cr_can_pickup = (touch & 32) != 0;
 	}
 	// imsk
 	bool imsk_key_down : 1;
