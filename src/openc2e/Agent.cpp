@@ -849,7 +849,7 @@ std::shared_ptr<Room> const Agent::bestRoomAt(unsigned int tryx, unsigned int tr
 }
 
 // Creatures 2 collision finding
-void Agent::findCollisionInDirection(unsigned int i, class MetaRoom* m, Point src, int& dx, int& dy, Point& deltapt, double& delta, bool& collided, bool followrooms) {
+void Agent::findCollisionInDirection(unsigned int i, class MetaRoom* m, Point src, int& dx, int& dy, Point& deltapt, double& delta, bool& collided, bool followrooms, int* obstacleDoorPerm) {
 	src.x = (int)src.x;
 	src.y = (int)src.y;
 
@@ -983,6 +983,8 @@ void Agent::findCollisionInDirection(unsigned int i, class MetaRoom* m, Point sr
 
 			if (collision && (trycollisions || (!newroom))) {
 				collided = true;
+				if (obstacleDoorPerm && newroom && world.map->hasDoor(room, newroom))
+					*obstacleDoorPerm = world.map->getDoorPerm(room, newroom);
 				break;
 			}
 

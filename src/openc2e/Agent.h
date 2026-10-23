@@ -281,7 +281,7 @@ class Agent : public std::enable_shared_from_this<Agent> {
 	Point const boundingBoxPoint(unsigned int n);
 	Point const boundingBoxPoint(unsigned int n, Point p, float w, float h);
 	std::shared_ptr<class Room> const bestRoomAt(unsigned int x, unsigned int y, unsigned int direction, class MetaRoom* m, std::shared_ptr<Room> exclude);
-	void findCollisionInDirection(unsigned int i, class MetaRoom* m, Point src, int& dx, int& dy, Point& deltapt, double& delta, bool& collided, bool followrooms);
+	void findCollisionInDirection(unsigned int i, class MetaRoom* m, Point src, int& dx, int& dy, Point& deltapt, double& delta, bool& collided, bool followrooms, int* obstacleDoorPerm = nullptr);
 
 	bool validInRoomSystem();
 	bool validInRoomSystem(Point p, float w, float h, int testperm);

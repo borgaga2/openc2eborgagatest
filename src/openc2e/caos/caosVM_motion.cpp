@@ -236,11 +236,29 @@ void v_OBST_c2(caosVM* vm) {
  the given direction.
 */
 void v_OBSV(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(direction)
+	VM_PARAM_INTEGER(direction)
 
 	valid_agent(vm->targ);
-	// TODO: implement
-	vm->result.setInt(INT_MAX);
+	THROW_IFNOT(direction >= 0 && direction <= 3);
+
+	int dx = 0, dy = 0;
+	switch (direction) {
+		case 0: dx = -10000; break; // left
+		case 1: dx = 10000; break; // right
+		case 2: dy = -10000; break; // up
+		case 3: dy = 10000; break; // down
+	}
+
+	Point src = vm->targ->boundingBoxPoint(direction);
+	Point deltapt(0, 0);
+	double delta = 1000000000;
+	bool collided = false;
+	int obstacleDoorPerm = INT_MAX;
+	MetaRoom* m = world.map->metaRoomAt(vm->targ->x, vm->targ->y);
+	THROW_IFNOT(m);
+
+	vm->targ->findCollisionInDirection(direction, m, src, dx, dy, deltapt, delta, collided, false, &obstacleDoorPerm);
+	vm->result.setInt(collided ? obstacleDoorPerm : INT_MAX);
 }
 
 /**
