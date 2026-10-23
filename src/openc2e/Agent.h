@@ -341,4 +341,3 @@ class LifeAssert {
 
 #endif
 /* vim: set noet: */
-
