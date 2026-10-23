@@ -920,6 +920,39 @@ class blockUntilApproached : public blockCond {
 	}
 };
 
+class blockUntilTouched : public blockCond {
+  protected:
+	AgentRef parent, it;
+	CreatureAgent* parentcreature;
+	unsigned short action;
+
+  public:
+	blockUntilTouched(AgentRef p, AgentRef i, unsigned short a)
+		: parent(p), it(i), action(a) {
+		assert(parent);
+		parentcreature = dynamic_cast<CreatureAgent*>(parent.get());
+		assert(parentcreature);
+	}
+	virtual bool operator()() {
+		if (!parent || !it || parent.get() == it.get())
+			return false;
+
+		Creature* creature = parentcreature->getCreature();
+		if (!creature || !creature->isAlive() || creature->isAsleep())
+			return false;
+
+		if (agentsTouching(parent, it)) {
+			it->queueScript(action, parent);
+			return false;
+		}
+
+		// TOUC is commonly used after APPR, but can also finish the approach
+		// itself when a script starts the touch action directly.
+		parentcreature->approach(it);
+		return true;
+	}
+};
+
 /**
  APPR (command)
  %status maybe
@@ -1629,12 +1662,21 @@ void v_ATTN_c1(caosVM* vm) {
 
 /**
  TOUC (command)
- %status stub
+ %status maybe
  %variants c1 c2 cv c3
 */
 void c_TOUC(caosVM* vm) {
-	vm->getTargCreature();
-	// TODO
+	CreatureAgent* creature = vm->getTargCreatureAgent();
+	if (!vm->_it_ || vm->_it_.get() == vm->targ.get())
+		return;
+
+	// AIM: uses 0/1/2 for activate1/activate2/deactivate.
+	const unsigned short action = static_cast<unsigned short>((creature->getAimAction() + 1) % 3);
+	if (agentsTouching(vm->targ, vm->_it_)) {
+		vm->_it_->queueScript(action, vm->targ);
+		return;
+	}
+	vm->startBlocking(new blockUntilTouched(vm->targ, vm->_it_, action));
 }
 
 /**
@@ -1736,10 +1778,9 @@ void c_IMPT(caosVM* vm) {
  %variants c1 c2
 */
 void c_AIM(caosVM* vm){
-	VM_PARAM_INTEGER_UNUSED(actionno)
-
-	// TODO: check for creature targ? who knows?
-	// TODO
+	VM_PARAM_INTEGER(actionno)
+	THROW_IFNOT(actionno >= 0 && actionno <= 2);
+	vm->getTargCreatureAgent()->setAimAction(static_cast<unsigned int>(actionno));
 }
 
 /**

@@ -1,4 +1,5 @@
 #include "common/Exception.h"
+#include "AgentHelpers.h"
 #include "common/Ascii.h"
 #include "common/io/FileReader.h"
 #include "common/io/FileWriter.h"
@@ -262,6 +263,48 @@ outv mins)");
 		}
 		if (signalled_word_bubbles_after <= signalled_word_bubbles_before)
 			throw Exception("C2 SAY# did not speak its built-in word");
+		auto touch_target = std::find_if(world.agents.begin(), world.agents.end(), [&](const std::shared_ptr<Agent>& candidate) {
+			return candidate && candidate.get() != newborn.get() && !dynamic_cast<CreatureAgent*>(candidate.get()) &&
+				!dynamic_cast<Bubble*>(candidate.get()) && candidate->findScript(1);
+		});
+		if (touch_target == world.agents.end())
+			throw Exception("Could not find a C2 object to test creature touching");
+		AgentRef interaction_target = *touch_target;
+		const float saved_target_x = interaction_target->x;
+		const float saved_target_y = interaction_target->y;
+		const int saved_target_actv = interaction_target->actv;
+		const unsigned int saved_touch_behavior = (interaction_target->cr_can_push ? 1u : 0u) |
+			(interaction_target->cr_can_pull ? 2u : 0u) | (interaction_target->cr_can_stop ? 4u : 0u) |
+			(interaction_target->cr_can_hit ? 8u : 0u) | (interaction_target->cr_can_eat ? 16u : 0u) |
+			(interaction_target->cr_can_pickup ? 32u : 0u);
+		interaction_target->moveTo(newborn->x + newborn->getWidth() + 8, newborn->y);
+		if (agentsTouching(newborn.get(), interaction_target.get()))
+			throw Exception("C2 TOUC test target starts inside the creature's reach");
+		interaction_target->actv = 2;
+		interaction_target->setC2TouchBehavior(1);
+		caosScript touch_script("c2", "<C2 touch action check>");
+		touch_script.parse("targ ownr aim: 0\ntarg ownr touc");
+		caosVM touch_vm(newborn);
+		if (!touch_vm.fireScript(touch_script.installer, false))
+			throw Exception("Could not start the C2 touch action check script");
+		touch_vm._it_ = interaction_target;
+		for (unsigned int tick = 0; tick < 1200 && !(touch_vm.stopped() && interaction_target->actv != 2); ++tick) {
+			if (!touch_vm.timeslice)
+				touch_vm.timeslice = 1;
+			touch_vm.tick();
+			engine.update();
+		}
+		const int target_actv_after_touch = interaction_target->actv;
+		const bool target_received_touch_action = touch_vm.stopped() && target_actv_after_touch != 2;
+		interaction_target->moveTo(saved_target_x, saved_target_y);
+		interaction_target->actv = saved_target_actv;
+		interaction_target->setC2TouchBehavior(saved_touch_behavior);
+		if (!target_received_touch_action)
+			throw Exception(fmt::format(
+				"C2 TOUC did not finish its approach and activate the target (actv {}, stopped {}, blocked {}, touching {}, aim {}, creature x/w {},{}, target x/w {},{})",
+				target_actv_after_touch, touch_vm.stopped(), touch_vm.blocking != nullptr,
+				agentsTouching(newborn.get(), interaction_target.get()), agent->getAimAction(), newborn->x,
+				newborn->getWidth(), interaction_target->x, interaction_target->getWidth()));
 		const float walk_start_x = newborn->x;
 		agent->setDirection(2);
 		agent->startWalking();

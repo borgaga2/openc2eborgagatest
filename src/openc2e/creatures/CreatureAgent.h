@@ -33,6 +33,7 @@ class CreatureAgent {
 
 	unsigned int direction;
 	bool walking, approaching;
+	unsigned int aimAction;
 	AgentRef approachtarget;
 
 	virtual void creatureBorn() {}
@@ -57,6 +58,8 @@ class CreatureAgent {
 	void startWalking();
 	void stopWalking();
 	void approach(AgentRef it);
+	void setAimAction(unsigned int action) { assert(action < 3); aimAction = action; }
+	unsigned int getAimAction() const { return aimAction; }
 	bool isApproaching() { return approaching; }
 };
 

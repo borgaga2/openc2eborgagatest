@@ -31,6 +31,7 @@ CreatureAgent::CreatureAgent() {
 	walking = false;
 	approaching = false;
 	direction = 0;
+	aimAction = 0;
 }
 
 CreatureAgent::~CreatureAgent() {
