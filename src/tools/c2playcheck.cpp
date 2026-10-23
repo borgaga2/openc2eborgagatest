@@ -21,6 +21,7 @@
 #include "sdlbackend/SDLMixerBackend.h"
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -194,6 +195,15 @@ outv mins)");
 		check_elapsed_clock(0, "0:0");
 		check_elapsed_clock(20 * 60 * 60 - 1, "0:59");
 		check_elapsed_clock(20 * 60 * 60, "1:0");
+		const float walk_start_x = newborn->x;
+		agent->setDirection(2);
+		agent->startWalking();
+		for (unsigned int i = 0; i < 80; ++i)
+			engine.update();
+		agent->stopWalking();
+		const float walked_pixels = std::fabs(newborn->x - walk_start_x);
+		if (walked_pixels < 1.0f)
+			throw Exception(fmt::format("C2 Norn did not move during 80 forced walking ticks (x={}, start={})", newborn->x, walk_start_x));
 		const auto start_age = creature->getAge();
 		const auto start_brain_ticks = creature->getBrain()->getTicks();
 		for (unsigned int i = 0; i < 3600; ++i) {
@@ -217,7 +227,7 @@ outv mins)");
 		}
 		if (related_norns < 2)
 			throw Exception("The placed two-parent C2 egg did not hatch into a second living Norn within 3,600 ticks");
-		fmt::print("C2 gameplay check passed: 3600 ticks, {} related living Norns, age {}, brain ticks {}, organs {}\n", related_norns, creature->getAge(), creature->getBrain()->getTicks(), creature->noOrgans());
+		fmt::print("C2 gameplay check passed: 3600 ticks, {} related living Norns, walked {} pixels, age {}, brain ticks {}, organs {}\n", related_norns, walked_pixels, creature->getAge(), creature->getBrain()->getTicks(), creature->noOrgans());
 		engine.shutdown();
 		return 0;
 	} catch (const std::exception& error) {
