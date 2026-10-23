@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cstring>
 #include <memory>
 
 CreatureAgent* caosVM::getTargCreatureAgent() {
@@ -1421,8 +1422,14 @@ void c_MATE(caosVM* vm) {
 	auto& child_history = world.history->getMoniker(child_moniker);
 	child_history.no_crossover_points = crossover_points;
 	child_history.addEvent(0, mother_moniker, father_moniker);
+	THROW_IFNOT(child_moniker.size() == sizeof(vm->_it_.get()->babymoniker));
+	int child_token = 0;
+	std::memcpy(&child_token, child_moniker.data(), sizeof(child_token));
+	vm->_it_.get()->babymoniker = child_token;
 	vm->_it_.get()->setSlot(1, child_genome);
 	*female_pregnant = 255;
+	world.history->getMoniker(mother_moniker).addEvent(8, child_moniker, father_moniker);
+	world.history->getMoniker(father_moniker).addEvent(9, child_moniker, mother_moniker);
 	if (auto* skeletal_female = dynamic_cast<SkeletalCreature*>(vm->_it_.get()))
 		skeletal_female->setPregnancy(1);
 }

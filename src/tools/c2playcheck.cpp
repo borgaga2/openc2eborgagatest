@@ -511,8 +511,24 @@ outv mins)");
 		const auto* child_genus = dynamic_cast<const creatureGenusGene*>(child_genome->getGene(2, 1, 1));
 		if (!child_genus || child_genus->mum != world.history->findMoniker(mate_female->getGenome()) || child_genus->dad != world.history->findMoniker(mate_male->getGenome()))
 			throw Exception("C2 MATE did not preserve both parent monikers in the offspring genome");
+		const std::string child_moniker = world.history->findMoniker(child_genome);
+		if (mate_female_ref->babymoniker != monikerToken(child_moniker))
+			throw Exception("C2 MATE did not set the mother's BABY moniker");
+		const auto& mother_events = world.history->getMoniker(world.history->findMoniker(mate_female->getGenome())).events;
+		const auto& father_events = world.history->getMoniker(world.history->findMoniker(mate_male->getGenome())).events;
+		const auto has_parent_event = [](const std::vector<historyevent>& events, unsigned int eventno, const std::string& child, const std::string& other_parent) {
+			return std::any_of(events.begin(), events.end(), [&](const historyevent& event) {
+				return event.eventno == eventno && event.monikers[0] == child && event.monikers[1] == other_parent;
+			});
+		};
+		if (!has_parent_event(mother_events, 8, child_moniker, world.history->findMoniker(mate_male->getGenome())))
+			throw Exception("C2 MATE did not record the mother's pregnancy event");
+		if (!has_parent_event(father_events, 9, child_moniker, world.history->findMoniker(mate_female->getGenome())))
+			throw Exception("C2 MATE did not record the father's impregnation event");
 		if (*mate_female->getLocusPointer(false, 1, 2, 1) == 0)
 			throw Exception("C2 MATE did not set the mother's pregnancy locus");
+		if (dynamic_cast<SkeletalCreature*>(mate_female_ref.get())->getPregnancy() != 1)
+			throw Exception("C2 MATE did not set the mother's visible pregnancy state");
 		fmt::print("C2 gameplay check passed: 3600 ticks, {} related living Norns, walked {} pixels, age {}, brain ticks {}, organs {}\n", related_norns, walked_pixels, creature->getAge(), creature->getBrain()->getTicks(), creature->noOrgans());
 		engine.shutdown();
 		return 0;
