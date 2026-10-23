@@ -358,6 +358,9 @@ target_link_libraries(openc2e_core PUBLIC
 	openc2e-fileformats
 	openc2e-mngmusic
 )
+if (WIN32)
+	target_link_libraries(openc2e_core PUBLIC ws2_32)
+endif()
 if (OPENC2E_USE_SERIALIZATION)
 	target_sources(openc2e_core PRIVATE src/openc2e/caos/caosVM_ser_real.cpp)
 	target_link_libraries(openc2e_core PUBLIC Boost::serialization)
@@ -426,6 +429,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(opencreatures1 BEFORE PRIVATE -Wconversion -Wsign-conversion -Wsign-compare)
 endif()
 target_link_libraries(opencreatures1 opencreatures1_core openc2e_sdlbackend)
+if (WIN32)
+	target_link_libraries(opencreatures1 dbghelp)
+endif()
 
 add_executable(test_opencreatures1
 	src/opencreatures1/tests/BiochemistryTest.cpp
@@ -454,6 +460,9 @@ target_link_libraries(creaturesarchivedumper openc2e-common z)
 
 add_executable(expdumper src/tools/expdumper.cpp)
 target_link_libraries(expdumper openc2e-fileformats)
+if (WIN32)
+	target_link_libraries(expdumper dbghelp)
+endif()
 
 add_executable(mngdumper src/tools/mngdumper.cpp)
 target_link_libraries(mngdumper openc2e-fileformats)
@@ -476,6 +485,7 @@ target_link_libraries(mngplayer2
 	openc2e_sdlbackend
 )
 if(WIN32)
+	target_link_libraries(mngplayer2 dbghelp)
 	set_target_properties(mngplayer2 PROPERTIES WIN32_EXECUTABLE TRUE OUTPUT_NAME MNGPlayer2)
 endif()
 

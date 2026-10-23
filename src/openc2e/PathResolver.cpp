@@ -132,14 +132,27 @@ static std::vector<fs::path> findByWildcard(FileDirectory type, fs::path wild) {
 	// TODO: check user directory before or after data directories?
 	for (auto d : data_directories) {
 		auto dirname = getDirectory(d, type);
+		const fs::path pattern = wild.filename();
 		if (!wild.parent_path().empty()) {
 			dirname /= wild.parent_path();
-			wild = wild.filename().string();
 		}
-		for (const auto& entry : case_insensitive_filesystem::directory_iterator(dirname)) {
-			if (wildcard_match_ignore_case(wild.string(), entry.lexically_relative(dirname).string())) {
-				results.push_back(entry);
+
+		// Resolve the directory case-insensitively, then enumerate its current
+		// contents directly so wildcard lookups cannot use a stale cached listing.
+		std::error_code err;
+		const fs::path resolved_dir = case_insensitive_filesystem::canonical(dirname, err);
+		if (err || !fs::is_directory(resolved_dir, err) || err) {
+			continue;
+		}
+
+		fs::directory_iterator entry(resolved_dir, err);
+		const fs::directory_iterator end;
+		while (!err && entry != end) {
+			const fs::path path = entry->path();
+			if (wildcard_match_ignore_case(pattern.string(), path.filename().string())) {
+				results.push_back(path);
 			}
+			entry.increment(err);
 		}
 	}
 	return results;

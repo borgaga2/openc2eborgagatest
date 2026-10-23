@@ -1058,7 +1058,8 @@ bool Engine::initialSetup() {
 		OPENC2E_DEFAULT_HEIGHT);
 	setBackend(b);
 	possible_backends.clear();
-	Openc2eImGui::Init();
+	if (!cmdline_norun)
+		Openc2eImGui::Init();
 
 	if (cmdline_norun)
 		preferred_audiobackend = "null";
