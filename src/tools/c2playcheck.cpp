@@ -10,6 +10,7 @@
 #include "openc2e/Camera.h"
 #include "fileformats/C2EggFile.h"
 #include "fileformats/genomeFile.h"
+#include "fileformats/sfc/C2SFCFile.h"
 #include "openc2e/Engine.h"
 #include "openc2e/Map.h"
 #include "openc2e/PointerAgent.h"
@@ -67,6 +68,20 @@ int main(int argc, char** argv) {
 		initialized = true;
 		if (engine.gametype != "c2")
 			throw Exception("The data directory must contain Creatures 2");
+		const auto world_archive_path = findMainDirectoryFile("World.sfc");
+		if (world_archive_path.empty())
+			throw Exception("Could not locate the installed C2 World.sfc archive");
+		FileReader world_archive_file(world_archive_path);
+		const auto world_archive_bytes = world_archive_file.read_to_end();
+		SpanReader world_archive_input(world_archive_bytes);
+		auto world_archive = sfc::read_c2_sfc_file(world_archive_input);
+		VectorWriter world_archive_output;
+		sfc::write_c2_sfc_file(world_archive_output, world_archive);
+		if (world_archive_output.vector() != world_archive_bytes)
+			throw Exception("Installed C2 World.sfc did not survive an exact archive round trip");
+		fmt::print("C2 world archive check passed: {} room slots, {} objects, {} sceneries, {} macros, {} unknown tail bytes\\n",
+			world_archive.map->rooms.size(), world_archive.objects.size(), world_archive.sceneries.size(),
+			world_archive.script_state.macros.size(), world_archive.trailing_data.size());
 		const auto egg_directory = findMainDirectoryFile("Eggs");
 		size_t eggs_checked = 0;
 		size_t different_parent_eggs = 0;
