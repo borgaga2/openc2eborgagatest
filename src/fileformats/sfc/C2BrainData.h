@@ -2,6 +2,7 @@
 
 #include "common/Exception.h"
 #include "common/NumericCast.h"
+#include "C2OrganData.h"
 #include "fileformats/MFCObject.h"
 #include "fileformats/MFCReader.h"
 
@@ -70,10 +71,7 @@ struct LobeV2 {
 	}
 };
 
-struct CBrainV2 : MFCObject {
-	// C2 persists the brain's organ state before its lobe table. Some of
-	// these bytes have not yet been decoded; they must survive a round trip.
-	std::array<uint8_t, 54> organ_state{};
+struct CBrainV2 : COrganV2 {
 	std::vector<LobeV2> lobes;
 	std::vector<NeuronV2> neurons;
 	uint32_t reserved_after_neurons = 0;
@@ -82,7 +80,7 @@ struct CBrainV2 : MFCObject {
 
 	template <typename Archive>
 	void serialize(Archive& ar) {
-		ar(std::span<uint8_t>(organ_state));
+		COrganV2::serialize(ar);
 		uint32_t num_lobes = numeric_cast<uint32_t>(lobes.size());
 		ar(num_lobes);
 		if (num_lobes > 256)
@@ -125,6 +123,7 @@ struct CBrainV2 : MFCObject {
 
 template <typename Archive>
 void register_c2_brain_class(Archive& ar) {
+	register_c2_organ_classes(ar);
 	ar.template register_class<CBrainV2>("CBrain", 2);
 }
 

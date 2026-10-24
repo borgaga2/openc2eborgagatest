@@ -13,8 +13,9 @@ std::vector<uint8_t> brain_fixture() {
 		for (unsigned int shift = 0; shift < 32; shift += 8)
 			bytes.push_back(static_cast<uint8_t>(value >> shift));
 	};
-	for (unsigned int i = 0; i < 54; ++i)
+	for (unsigned int i = 0; i < 34; ++i)
 		bytes.push_back(static_cast<uint8_t>(i + 1));
+	u32(1); u32(0); u32(0); u32(0); u32(0); // organ header and empty chemistry
 	u32(1); // lobes
 	u32(3); u32(4); u32(2); u32(1); // lobe position and dimensions
 	for (unsigned int i = 0; i < 247; ++i)
