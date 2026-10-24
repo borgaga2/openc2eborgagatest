@@ -8,7 +8,7 @@
 #include "fileformats/MFCWriter.h"
 
 #include <algorithm>
-#include <array>
+#include <cstdint>
 
 namespace sfc {
 
