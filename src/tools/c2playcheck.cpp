@@ -168,10 +168,12 @@ int main(int argc, char** argv) {
 		const auto* genus = dynamic_cast<const creatureGenusGene*>(creature->getGenome()->getGene(2, 1, 1));
 		if (!genus || genus->mum != mother_moniker || genus->dad != father_moniker)
 			throw Exception("The crossed genome did not preserve both parent monikers");
-		const auto run_c2_agent_script = [&](const std::string& source) {
+		const auto run_c2_agent_script_as = [&](AgentRef owner, AgentRef it, const std::string& source) {
 			caosScript script("c2", "<C2 gameplay check>");
 			script.parse(source);
-			caosVM vm(newborn);
+			caosVM vm(owner);
+			vm.targ = owner;
+			vm._it_ = it;
 			StringWriter output;
 			vm.outputstream = &output;
 			struct reset_output_stream {
@@ -180,6 +182,9 @@ int main(int argc, char** argv) {
 			} reset{vm};
 			vm.runEntirely(script.installer);
 			return output.string();
+		};
+		const auto run_c2_agent_script = [&](const std::string& source) {
+			return run_c2_agent_script_as(newborn, AgentRef(), source);
 		};
 		const size_t instincts_before_doin = creature->getNoUnprocessedInstincts();
 		if (instincts_before_doin < 2)
@@ -331,21 +336,6 @@ outv mins)");
 		}
 		if (!found_speech_bubble)
 			throw Exception("C2 SAY$ did not create the requested speech bubble");
-		const std::array<std::array<const char*, 2>, 4> order_speeches = {{
-			{{"targ ownr ordr shou \"order-shou\"", "order-shou"}},
-			{{"targ ownr ordr sign \"order-sign\"", "order-sign"}},
-			{{"targ ownr ordr tact \"order-tact\"", "order-tact"}},
-			{{"targ ownr ordr writ ownr \"order-writ\"", "order-writ"}},
-		}};
-		for (const auto& [script_source, speech] : order_speeches) {
-			(void)run_c2_agent_script(script_source);
-			const bool found_order_bubble = std::any_of(world.agents.begin(), world.agents.end(), [speech](const std::shared_ptr<Agent>& candidate) {
-				auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
-				return bubble && bubble->getText() == speech;
-			});
-			if (!found_order_bubble)
-				throw Exception(fmt::format("C2 ORDR did not create the requested {} speech bubble", speech));
-		}
 		unsigned int most_pressing_drive = 0;
 		for (unsigned int drive = 1; drive < 17; ++drive) {
 			if (creature->getDrive(drive) > creature->getDrive(most_pressing_drive))
@@ -538,6 +528,53 @@ outv mins)");
 		auto mate_female_ref = create_mate_test_creature(genome, true);
 		auto* mate_male = dynamic_cast<c2Creature*>(dynamic_cast<CreatureAgent*>(mate_male_ref.get())->getCreature());
 		auto* mate_female = dynamic_cast<c2Creature*>(dynamic_cast<CreatureAgent*>(mate_female_ref.get())->getCreature());
+		auto* female_sensory = mate_female->getBrain()->getLobeByTissue(5);
+		if (!female_sensory || !female_sensory->getNoNeurons())
+			throw Exception("C2 MATE check could not find a sensory neuron for speech routing checks");
+		auto speech_stimulus = std::make_unique<creatureStimulusGene>(2);
+		speech_stimulus->header.switchontime = mate_female->getStage();
+		speech_stimulus->stim = 11;
+		speech_stimulus->significance = 1;
+		speech_stimulus->sensoryneuron = 0;
+		speech_stimulus->intensity = 64;
+		speech_stimulus->modulate = false;
+		speech_stimulus->addoffset = false;
+		speech_stimulus->whenasleep = false;
+		for (unsigned int i = 0; i < 4; ++i) {
+			speech_stimulus->silent[i] = false;
+			speech_stimulus->drives[i] = 255;
+			speech_stimulus->amounts[i] = 124;
+		}
+		mate_female->getGenome()->genes.push_back(std::move(speech_stimulus));
+		const float saved_speaker_x = mate_male_ref->x;
+		const float saved_speaker_y = mate_male_ref->y;
+		const float saved_listener_x = mate_female_ref->x;
+		const float saved_listener_y = mate_female_ref->y;
+		const float saved_listener_range = mate_female_ref->range;
+		mate_male_ref->moveTo(newborn->x, newborn->y, true);
+		mate_female_ref->moveTo(newborn->x + 1.0f, newborn->y, true);
+		mate_female_ref->range = 256.0f;
+		const std::array<std::array<const char*, 2>, 4> order_speeches = {{
+			{{"targ ownr ordr shou \"order-shou\"", "order-shou"}},
+			{{"targ ownr ordr sign \"order-sign\"", "order-sign"}},
+			{{"targ ownr ordr tact \"order-tact\"", "order-tact"}},
+			{{"targ ownr ordr writ _it_ \"order-writ\"", "order-writ"}},
+		}};
+		for (const auto& [script_source, speech] : order_speeches) {
+			female_sensory->getNeuron(0)->state = 0;
+			(void)run_c2_agent_script_as(mate_male_ref, mate_female_ref, script_source);
+			if (female_sensory->getNeuron(0)->state != 64)
+				throw Exception(fmt::format("C2 ORDR {} did not notify the intended listener", speech));
+			const bool found_order_bubble = std::any_of(world.agents.begin(), world.agents.end(), [speech](const std::shared_ptr<Agent>& candidate) {
+				auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
+				return bubble && bubble->getText() == speech;
+			});
+			if (!found_order_bubble)
+				throw Exception(fmt::format("C2 ORDR did not create the requested {} speech bubble", speech));
+		}
+		mate_male_ref->moveTo(saved_speaker_x, saved_speaker_y, true);
+		mate_female_ref->moveTo(saved_listener_x, saved_listener_y, true);
+		mate_female_ref->range = saved_listener_range;
 		auto* male_fertile = mate_male->getLocusPointer(true, 1, 2, 0);
 		auto* female_fertile = mate_female->getLocusPointer(true, 1, 2, 0);
 		auto* female_receptive = mate_female->getLocusPointer(true, 1, 2, 1);
