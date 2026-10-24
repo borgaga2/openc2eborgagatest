@@ -241,6 +241,7 @@ oldCreature::oldCreature(std::shared_ptr<genomeFile> g, bool is_female, unsigned
 
 	brain = 0; // just in case
 	dreamInstinctsRemaining = 0;
+	dreamTicksRemaining = 0;
 	// C1/C2 attention is indexed by the 40 legacy object categories.
 	chosenagents.resize(40);
 }
@@ -265,6 +266,7 @@ unsigned int oldCreature::processInstincts(unsigned int count) {
 
 void oldCreature::startDreaming(unsigned int maxInstincts) {
 	dreamInstinctsRemaining = maxInstincts;
+	dreamTicksRemaining = 0;
 	setDreaming(maxInstincts > 0 && getNoUnprocessedInstincts() > 0);
 }
 

@@ -39,20 +39,31 @@ void oldCreature::tickBrain() {
 			return; // TODO
 	}
 
-	// TODO: correct timing?
-	if ((ticks % 4) != 0)
-		return;
-
 	if (dreaming) {
+		// C2's DREA processes each instinct over roughly five seconds. At ten
+		// world ticks per second, keep the creature asleep and insensible for 50
+		// ticks after each instinct is applied.
+		if (dreamTicksRemaining > 0) {
+			--dreamTicksRemaining;
+			if (dreamTicksRemaining > 0)
+				return;
+		}
 		if (!dreamInstinctsRemaining || !getNoUnprocessedInstincts()) {
 			setDreaming(false);
 			return;
 		}
-		dreamInstinctsRemaining -= processInstincts(1);
-		if (!dreamInstinctsRemaining || !getNoUnprocessedInstincts())
+		const unsigned int processed = processInstincts(1);
+		dreamInstinctsRemaining -= processed;
+		if (processed > 0)
+			dreamTicksRemaining = 50;
+		else
 			setDreaming(false);
 		return;
 	}
+
+	// TODO: correct timing?
+	if ((ticks % 4) != 0)
+		return;
 
 	chooseAgents();
 	// Visible agents feed the legacy stimulus-source lobe. Its cells map to

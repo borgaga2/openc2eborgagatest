@@ -46,6 +46,7 @@ class oldCreature : public Creature {
 	unsigned char involaction[8];
 	unsigned int involactionlatency[8];
 	unsigned int dreamInstinctsRemaining;
+	unsigned int dreamTicksRemaining;
 
 	void addGene(gene*);
 	void tickBrain();

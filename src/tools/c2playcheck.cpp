@@ -194,6 +194,10 @@ int main(int argc, char** argv) {
 		(void)run_c2_agent_script("drea 1");
 		if (!creature->isDreaming() || !creature->isAsleep())
 			throw Exception("C2 DREA did not put the Norn to sleep and start dreaming");
+		for (unsigned int tick = 0; tick < 50; ++tick)
+			creature->tick();
+		if (!creature->isDreaming() || creature->getNoUnprocessedInstincts() != instincts_before_dream - 1)
+			throw Exception("C2 DREA did not remain asleep through its five-second instinct interval");
 		creature->tick();
 		if (creature->isDreaming() || !creature->isAsleep() || creature->getNoUnprocessedInstincts() != instincts_before_dream - 1)
 			throw Exception("C2 DREA did not process its one-instinct limit and end dreaming");

@@ -1867,7 +1867,7 @@ void v_DRIV_c1(caosVM* vm) {
 
 /**
  DREA (command) max (integer)
- %status stub
+ %status maybe
  %variants c1 c2
 
  Start dreaming and process (at most?) max instincts.
