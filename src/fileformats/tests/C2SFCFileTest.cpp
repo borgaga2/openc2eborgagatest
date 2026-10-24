@@ -2,6 +2,7 @@
 
 #include "common/io/SpanReader.h"
 #include "common/io/VectorWriter.h"
+#include "fileformats/MFCWriter.h"
 
 #include <gtest/gtest.h>
 
@@ -49,10 +50,15 @@ TEST(C2SFCFile, PreservesSectionsPaddingAndUnknownTail) {
 TEST(C2SFCFile, RejectsArchiveWithoutC2ObjectSectionMarker) {
 	sfc::C2SFCFile original;
 	original.map = std::make_shared<sfc::MapDataV2>();
+	original.objects.push_back(std::make_shared<sfc::SimpleObjectV2>());
 	VectorWriter encoded;
 	sfc::write_c2_sfc_file(encoded, original);
+	VectorWriter map_bytes;
+	MFCWriter map_writer(map_bytes);
+	sfc::register_c2_map_classes(map_writer);
+	map_writer(original.map);
 	auto truncated = encoded.vector();
-	truncated.resize(20);
+	truncated[map_bytes.vector().size() + original.map_separator.size() + sizeof(uint32_t)] = 0;
 	SpanReader input(truncated);
 	EXPECT_ANY_THROW(sfc::read_c2_sfc_file(input));
 }
