@@ -201,6 +201,10 @@ int main(int argc, char** argv) {
 		const auto run_c2_agent_script = [&](const std::string& source) {
 			return run_c2_agent_script_as(newborn, AgentRef(), source);
 		};
+		(void)run_c2_agent_script("gene load targ 3 \"norn\"");
+		const auto loaded_genome = newborn->genome_slots.find(3);
+		if (loaded_genome == newborn->genome_slots.end() || !loaded_genome->second || loaded_genome->second->getVersion() != 2)
+			throw Exception("C2 GENE LOAD did not place the selected genome in its requested slot");
 		const size_t instincts_before_doin = creature->getNoUnprocessedInstincts();
 		if (instincts_before_doin < 2)
 			throw Exception("Newborn C2 Norn did not have enough queued instincts for DOIN check");
