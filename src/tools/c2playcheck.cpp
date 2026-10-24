@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
 		sfc::write_c2_sfc_file(world_archive_output, world_archive);
 		if (world_archive_output.vector() != world_archive_bytes)
 			throw Exception("Installed C2 World.sfc did not survive an exact archive round trip");
-		fmt::print("C2 world archive check passed: {} room slots, {} objects, {} sceneries, {} macros, {} unknown tail bytes\\n",
+		fmt::print("C2 world archive check passed: {} room slots, {} objects, {} sceneries, {} macros, {} unknown tail bytes\n",
 			world_archive.map->rooms.size(), world_archive.objects.size(), world_archive.sceneries.size(),
 			world_archive.script_state.macros.size(), world_archive.trailing_data.size());
 		const auto egg_directory = findMainDirectoryFile("Eggs");
