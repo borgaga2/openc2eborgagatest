@@ -181,6 +181,20 @@ int main(int argc, char** argv) {
 			vm.runEntirely(script.installer);
 			return output.string();
 		};
+		const size_t instincts_before_doin = creature->getNoUnprocessedInstincts();
+		if (instincts_before_doin < 2)
+			throw Exception("Newborn C2 Norn did not have enough queued instincts for DOIN check");
+		(void)run_c2_agent_script("doin 2");
+		if (creature->getNoUnprocessedInstincts() != instincts_before_doin - 2)
+			throw Exception("C2 DOIN did not process exactly the requested number of instincts");
+		const size_t instincts_before_dream = creature->getNoUnprocessedInstincts();
+		(void)run_c2_agent_script("drea 1");
+		if (!creature->isDreaming() || !creature->isAsleep())
+			throw Exception("C2 DREA did not put the Norn to sleep and start dreaming");
+		creature->tick();
+		if (creature->isDreaming() || !creature->isAsleep() || creature->getNoUnprocessedInstincts() != instincts_before_dream - 1)
+			throw Exception("C2 DREA did not process its one-instinct limit and end dreaming");
+		creature->setAsleep(false); // Restore the newborn for the remaining interaction checks.
 		(void)run_c2_agent_script("mesg writ _it_ 0");
 		const float saved_obsv_x = newborn->x;
 		const float saved_obsv_y = newborn->y;

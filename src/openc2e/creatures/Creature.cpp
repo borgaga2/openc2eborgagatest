@@ -240,12 +240,32 @@ oldCreature::oldCreature(std::shared_ptr<genomeFile> g, bool is_female, unsigned
 	dead = 0;
 
 	brain = 0; // just in case
+	dreamInstinctsRemaining = 0;
 	// C1/C2 attention is indexed by the 40 legacy object categories.
 	chosenagents.resize(40);
 }
 
 oldCreature::~oldCreature() {
 	delete brain;
+}
+
+unsigned int oldCreature::processInstincts(unsigned int count) {
+	if (!brain)
+		return 0;
+
+	unsigned int processed = 0;
+	while (processed < count && !unprocessedinstincts.empty()) {
+		creatureInstinctGene* instinct = unprocessedinstincts.front();
+		unprocessedinstincts.pop_front();
+		brain->processInstinct(*instinct);
+		++processed;
+	}
+	return processed;
+}
+
+void oldCreature::startDreaming(unsigned int maxInstincts) {
+	dreamInstinctsRemaining = maxInstincts;
+	setDreaming(maxInstincts > 0 && getNoUnprocessedInstincts() > 0);
 }
 
 c1Creature::c1Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a)

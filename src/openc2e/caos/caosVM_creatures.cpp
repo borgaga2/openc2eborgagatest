@@ -1873,12 +1873,12 @@ void v_DRIV_c1(caosVM* vm) {
  Start dreaming and process (at most?) max instincts.
 */
 void c_DREA_c1(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(max)
+	VM_PARAM_INTEGER(max)
 
 	oldCreature* c = getoldCreature(vm->targ.get());
 	THROW_IFNOT(c);
 
-	// TODO
+	c->startDreaming(static_cast<unsigned int>(std::max(0, max)));
 }
 
 /**
@@ -2111,17 +2111,18 @@ void v_SEEN(caosVM* vm) {
 
 /**
  DOIN (command) noinstincts (integer)
- %status stub
+ %status maybe
+ %variants c1 c2
 
  Make the target creature process the specified number of instincts.
 */
 void c_DOIN(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(noinstincts)
+	VM_PARAM_INTEGER(noinstincts)
 
-	Creature* c = vm->getTargCreature();
+	oldCreature* c = getoldCreature(vm->targ.get());
 	THROW_IFNOT(c);
 
-	// TODO
+	c->processInstincts(static_cast<unsigned int>(std::max(0, noinstincts)));
 }
 
 /**

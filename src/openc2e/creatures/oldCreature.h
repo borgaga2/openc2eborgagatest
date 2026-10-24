@@ -45,6 +45,7 @@ class oldCreature : public Creature {
 	unsigned char dead;
 	unsigned char involaction[8];
 	unsigned int involactionlatency[8];
+	unsigned int dreamInstinctsRemaining;
 
 	void addGene(gene*);
 	void tickBrain();
@@ -76,6 +77,8 @@ class oldCreature : public Creature {
 	void finishDecisionAction() override;
 
 	oldBrain* getBrain() { return brain; }
+	unsigned int processInstincts(unsigned int count);
+	void startDreaming(unsigned int maxInstincts);
 
 	unsigned char* getLocusPointer(bool receptor, unsigned char o, unsigned char t, unsigned char l);
 

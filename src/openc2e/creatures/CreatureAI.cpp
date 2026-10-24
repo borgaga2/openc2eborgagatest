@@ -44,7 +44,14 @@ void oldCreature::tickBrain() {
 		return;
 
 	if (dreaming) {
-		// TODO
+		if (!dreamInstinctsRemaining || !getNoUnprocessedInstincts()) {
+			setDreaming(false);
+			return;
+		}
+		dreamInstinctsRemaining -= processInstincts(1);
+		if (!dreamInstinctsRemaining || !getNoUnprocessedInstincts())
+			setDreaming(false);
+		return;
 	}
 
 	chooseAgents();
