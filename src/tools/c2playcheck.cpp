@@ -181,6 +181,7 @@ int main(int argc, char** argv) {
 			vm.runEntirely(script.installer);
 			return output.string();
 		};
+		(void)run_c2_agent_script("mesg writ _it_ 0");
 		const float saved_obsv_x = newborn->x;
 		const float saved_obsv_y = newborn->y;
 		const int saved_obsv_size = newborn->size;
@@ -287,6 +288,16 @@ outv mins)");
 			if (decision_neuron->state != expected_state)
 				throw Exception("C2 IMPT did not nudge the current decision neuron");
 		}
+		auto* trig_lobe = creature->getBrain()->getLobeByTissue(1);
+		if (!trig_lobe || !trig_lobe->getNoNeurons())
+			throw Exception("C2 Norn is missing the drive lobe needed for the TRIG check");
+		constexpr unsigned int trig_cell = 0;
+		constexpr unsigned char trig_amount = 173;
+		(void)run_c2_agent_script(fmt::format("targ ownr trig 1 {} {}", trig_cell, static_cast<unsigned int>(trig_amount)));
+		const oldNeuron* triggered_neuron = trig_lobe->getNeuron(trig_cell);
+		if (triggered_neuron->state != trig_amount || triggered_neuron->output != trig_amount)
+			throw Exception("C2 TRIG did not fire the requested neuron at the requested strength");
+		(void)run_c2_agent_script("targ ownr trig 255 0 173"); // Invalid lobe indices are ignored safely.
 		(void)run_c2_agent_script("targ ownr done");
 		if (creature->getDecisionId() != -1)
 			throw Exception("C2 DONE did not clear the current decision");

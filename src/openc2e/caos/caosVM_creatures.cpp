@@ -30,6 +30,7 @@
 #include "creatures/CompoundCreature.h"
 #include "creatures/SkeletalCreature.h"
 #include "creatures/c2eCreature.h"
+#include "creatures/oldBrain.h"
 #include "creatures/oldCreature.h"
 #include "historyManager.h"
 
@@ -1995,12 +1996,28 @@ void c_SAY(caosVM* vm) {
  %variants c2
 */
 void c_TRIG(caosVM* vm) {
-	VM_PARAM_INTEGER_UNUSED(amount)
-	VM_PARAM_INTEGER_UNUSED(cell)
-	VM_PARAM_INTEGER_UNUSED(lobe)
+	VM_PARAM_INTEGER(amount)
+	VM_PARAM_INTEGER(cell)
+	VM_PARAM_INTEGER(lobe)
 
 	valid_agent(vm->targ);
-	// TODO
+	oldCreature* creature = getoldCreature(vm->targ.get());
+	THROW_IFNOT(creature);
+	oldBrain* brain = creature->getBrain();
+	if (!brain || lobe < 0 || static_cast<size_t>(lobe) >= brain->lobes.size())
+		return;
+
+	oldLobe* target_lobe = brain->getLobeByTissue(static_cast<unsigned int>(lobe));
+	if (!target_lobe || cell < 0 || static_cast<unsigned int>(cell) >= target_lobe->getNoNeurons())
+		return;
+
+	// TRIG forces a neuron to fire at the requested signal strength. Keep both
+	// its current state and output in sync so downstream lobes can observe it
+	// before the next normal brain update recomputes the network.
+	const auto signal = static_cast<unsigned char>(std::clamp(amount, 0, 255));
+	oldNeuron* neuron = target_lobe->getNeuron(static_cast<unsigned int>(cell));
+	neuron->state = signal;
+	neuron->output = signal;
 }
 
 /**

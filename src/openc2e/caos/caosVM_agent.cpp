@@ -894,7 +894,9 @@ unsigned int calculateScriptId(unsigned int message_id) {
 void c_MESG_WRIT(caosVM* vm) {
 	VM_VERIFY_SIZE(2)
 	VM_PARAM_INTEGER(message_id)
-	VM_PARAM_VALIDAGENT(agent);
+	VM_PARAM_AGENT(agent)
+	if (!agent)
+		return;
 
 	agent->queueScript(calculateScriptId(message_id), vm->owner.get());
 }
