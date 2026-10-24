@@ -1,10 +1,7 @@
 #include "common/io/FileReader.h"
 #include "common/io/SpanReader.h"
 #include "common/io/VectorWriter.h"
-#include "fileformats/MFCWriter.h"
-#include "fileformats/sfc/C2MapData.h"
-#include "fileformats/sfc/C2ObjectData.h"
-#include "fileformats/sfc/C2ScriptState.h"
+#include "fileformats/sfc/C2SFCFile.h"
 #include "fileformats/sfc/SFCFile.h"
 
 #include <algorithm>
@@ -16,79 +13,21 @@ static int check_c2_archive(const char* filename, C2Section section) {
 	FileReader file(filename);
 	auto bytes = file.read_to_end();
 	SpanReader in(bytes);
-	MFCReader reader(in);
-	sfc::register_c2_map_classes(reader);
-	sfc::register_c2_object_classes(reader);
-	sfc::register_c2_macro_class(reader);
-	std::shared_ptr<sfc::MapDataV2> map;
-	reader(map);
-	if (!map)
-		throw Exception("Missing C2 map");
+	auto archive = sfc::read_c2_sfc_file(in);
 	VectorWriter out;
-	MFCWriter writer(out);
-	sfc::register_c2_map_classes(writer);
-	sfc::register_c2_object_classes(writer);
-	sfc::register_c2_macro_class(writer);
-	writer(map);
+	sfc::write_c2_sfc_file(out, archive);
 	if (section != C2Section::Map) {
-		// The legacy loader skips this zero-filled region after the map.
-		// Preserve it verbatim while checking the following object section;
-		// its interpretation is still needed for full world serialization.
-		std::vector<uint8_t> separator;
-		while (in.peek_byte() == 0) {
-			separator.push_back(0);
-			in.seek_relative(1);
-		}
-		// A count divisible by 256 starts with zero too. Locate the first
-		// object's new-class marker instead of swallowing count bytes as padding.
-		bool found_count = false;
-		for (size_t rewind = 0; rewind <= 3 && rewind <= separator.size(); ++rewind) {
-			const size_t marker = in.tell() - rewind + 4;
-			if (marker + 3 < bytes.size() && bytes[marker] == 0xff && bytes[marker + 1] == 0xff && bytes[marker + 2] == 2 && bytes[marker + 3] == 0) {
-				separator.resize(separator.size() - rewind);
-				in.seek_relative(-static_cast<int64_t>(rewind));
-				found_count = true;
-				break;
-			}
-		}
-		if (!found_count)
-			throw Exception("Cannot locate the C2 object section after the map");
-		out.write(reinterpret_cast<const char*>(separator.data()), separator.size());
-		std::vector<std::shared_ptr<sfc::ObjectV2>> objects;
-		reader.size_u32(objects);
-		for (auto& object : objects)
-			reader(object);
-		writer.size_u32(objects);
-		for (auto& object : objects)
-			writer(object);
-		std::vector<std::shared_ptr<sfc::SceneryV2>> sceneries;
-		reader.size_u32(sceneries);
-		for (auto& scenery : sceneries)
-			reader(scenery);
-		writer.size_u32(sceneries);
-		for (auto& scenery : sceneries)
-			writer(scenery);
-		std::vector<sfc::ScriptV2> scripts;
-		reader.size_u32(scripts);
-		for (auto& script : scripts)
-			script.serialize(reader);
-		writer.size_u32(scripts);
-		for (auto& script : scripts)
-			script.serialize(writer);
-		fmt::print("C2 objects: {}, sceneries: {}, scripts: {}\n", objects.size(), sceneries.size(), scripts.size());
+		fmt::print("C2 objects: {}, sceneries: {}, scripts: {}\n", archive.objects.size(), archive.sceneries.size(), archive.scripts.size());
 	}
 	if (section == C2Section::Macros) {
-		sfc::ScriptStateV2 state;
-		state.serialize(reader);
-		state.serialize(writer);
-		const auto active = std::count_if(state.macros.begin(), state.macros.end(), [](const auto& macro) { return macro != nullptr; });
-		fmt::print("C2 running scripts: {}, macro slots: {}, speech entries: {}\n", active, state.macros.size(), state.speech_history.size());
-		fmt::print("Remaining bytes after macros: {}\n", bytes.size() - in.tell());
+		const auto active = std::count_if(archive.script_state.macros.begin(), archive.script_state.macros.end(), [](const auto& macro) { return macro != nullptr; });
+		fmt::print("C2 running scripts: {}, macro slots: {}, speech entries: {}\n", active, archive.script_state.macros.size(), archive.script_state.speech_history.size());
+		fmt::print("Remaining bytes after macros: {}\n", archive.trailing_data.size());
 	}
 	const auto& encoded = out.vector();
-	const bool exact = encoded.size() == in.tell() && std::equal(encoded.begin(), encoded.end(), bytes.begin());
+	const bool exact = encoded == bytes;
 	const char* label = section == C2Section::Map ? "map" : section == C2Section::Objects ? "map and objects" : "map, objects and macros";
-	fmt::print("C2 {}: {} room slots, {} bytes; exact read/write round trip: {}\n", label, map->rooms.size(), in.tell(), exact);
+	fmt::print("C2 {}: {} room slots, {} bytes; exact read/write round trip: {}\n", label, archive.map->rooms.size(), encoded.size(), exact);
 	return exact ? 0 : 1;
 }
 
@@ -120,3 +59,4 @@ int main(int argc, char** argv) try {
 	fmt::print(stderr, "Error: {}\n", error.what());
 	return 1;
 }
+
