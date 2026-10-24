@@ -97,6 +97,7 @@ void c_GENE_KILL(caosVM* vm) {
 /**
  GENE LOAD (command) agent (agent) slot (integer) genefile (string)
  %status maybe
+ %variants c1 c2 c3
 
  Load a genome file into a slot. You can use * and ? wildcards in the filename.
 */
@@ -109,7 +110,7 @@ void c_GENE_LOAD(caosVM* vm) {
 	if (!p)
 		throw Exception("failed to find genome file '" + genefile + "'");
 
-	THROW_IFNOT(p->getVersion() == 3);
+	THROW_IFNOT(p->getVersion() == engine.version);
 
 	agent->genome_slots[slot] = p;
 	world.newMoniker(p, genefile, agent);
