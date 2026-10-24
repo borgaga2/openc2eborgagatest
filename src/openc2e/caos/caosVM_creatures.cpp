@@ -2128,6 +2128,7 @@ void c_DOIN(caosVM* vm) {
 /**
  INS# (integer)
  %status maybe
+ %variants c2 cv c3 sm
 
  Return the number of unprocessed instincts left in the instinct queue for the target creature.
 */

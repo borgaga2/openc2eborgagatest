@@ -184,6 +184,9 @@ int main(int argc, char** argv) {
 		const size_t instincts_before_doin = creature->getNoUnprocessedInstincts();
 		if (instincts_before_doin < 2)
 			throw Exception("Newborn C2 Norn did not have enough queued instincts for DOIN check");
+		const auto reported_instincts = run_c2_agent_script("outv ins#");
+		if (reported_instincts != std::to_string(instincts_before_doin))
+			throw Exception(fmt::format("C2 INS# returned {}, expected {}", reported_instincts, instincts_before_doin));
 		(void)run_c2_agent_script("doin 2");
 		if (creature->getNoUnprocessedInstincts() != instincts_before_doin - 2)
 			throw Exception("C2 DOIN did not process exactly the requested number of instincts");
