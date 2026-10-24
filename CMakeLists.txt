@@ -211,6 +211,7 @@ add_library(openc2e-fileformats STATIC
 	src/fileformats/ImageUtils.cpp
 	src/fileformats/sfc/EXPFile.cpp
 	src/fileformats/sfc/SFCFile.cpp
+	src/fileformats/sfc/C2SFCFile.cpp
 )
 target_include_directories(openc2e-fileformats PRIVATE src/fileformats)
 target_link_libraries(openc2e-fileformats
@@ -228,6 +229,7 @@ add_executable(test_fileformats
 	src/fileformats/tests/SFCMapTest.cpp
 	src/fileformats/tests/SFCObjectTest.cpp
 	src/fileformats/tests/SFCMacroTest.cpp
+	src/fileformats/tests/C2SFCFileTest.cpp
 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(test_fileformats BEFORE PRIVATE -Wconversion -Wsign-conversion -Wsign-compare)
