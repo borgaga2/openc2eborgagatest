@@ -163,6 +163,34 @@ void routeC2EStimulus(Agent* source, LegacyStimulusRoute route, ApplyStimulus ap
 	}
 }
 
+void speakCreatureToAudience(caosVM* vm, const std::string& speech, LegacyStimulusRoute route) {
+	Creature* creature = vm->getTargCreature();
+	if (!creature->isAlive() || creature->isAsleep())
+		return;
+
+	Bubble::newBubble(vm->targ.get(), true, speech);
+	vm->targ->speak(speech);
+	routeLegacyStimulus(vm->targ.get(), route, [](oldCreature* listener) {
+		listener->handleStimulus(11); // Heard/observed another Creature speaking.
+	});
+	routeC2EStimulus(vm->targ.get(), route, [](c2eCreature* listener) {
+		listener->handleStimulus(11, 1.0f);
+	});
+}
+
+void speakCreatureToOne(caosVM* vm, const std::string& speech, Agent* recipient) {
+	Creature* creature = vm->getTargCreature();
+	if (!creature->isAlive() || creature->isAsleep())
+		return;
+
+	Bubble::newBubble(vm->targ.get(), true, speech);
+	vm->targ->speak(speech);
+	if (oldCreature* listener = getoldCreature(recipient))
+		listener->handleStimulus(11);
+	if (c2eCreature* listener = getc2eCreature(recipient))
+		listener->handleStimulus(11, 1.0f);
+}
+
 void readCustomStimulus(caosVM* vm, int& significance, int& input, int& intensity, int& features, int chemicals[4], int amounts[4]) {
 	VM_PARAM_INTEGER(amount3)
 	VM_PARAM_INTEGER(chemical3)
@@ -1060,55 +1088,59 @@ void v_LIMB(caosVM* vm) {
 
 /**
  ORDR SHOU (command) speech (string)
- %status stub
+ %status maybe
+ %variants c2
 
  Makes the target Creature speak the specified speech to all creatures in hearing range.
 */
 void c_ORDR_SHOU(caosVM* vm) {
-	VM_PARAM_STRING_UNUSED(speech)
+	VM_PARAM_STRING(speech)
 
 	valid_agent(vm->targ);
-	// TODO
+	speakCreatureToAudience(vm, speech, LegacyStimulusRoute::heard);
 }
 
 /**
  ORDR SIGN (command) speech (string)
- %status stub
+ %status maybe
+ %variants c2
 
  Makes the target Creature speak the specified speech to all creatures that can see it.
 */
 void c_ORDR_SIGN(caosVM* vm) {
-	VM_PARAM_STRING_UNUSED(speech)
+	VM_PARAM_STRING(speech)
 
 	valid_agent(vm->targ);
-	// TODO
+	speakCreatureToAudience(vm, speech, LegacyStimulusRoute::seen);
 }
 
 /**
  ORDR TACT (command) speech (string)
- %status stub
+ %status maybe
+ %variants c2
 
  Makes the target Creature speak the specified speech to all creatures that are touching it.
 */
 void c_ORDR_TACT(caosVM* vm) {
-	VM_PARAM_STRING_UNUSED(speech)
+	VM_PARAM_STRING(speech)
 
 	valid_agent(vm->targ);
-	// TODO
+	speakCreatureToAudience(vm, speech, LegacyStimulusRoute::touched);
 }
 
 /**
  ORDR WRIT (command) creature (agent) speech (string)
- %status stub
+ %status maybe
+ %variants c2
 
  Makes the target Creature speak the specified speech to the specified creature.
 */
 void c_ORDR_WRIT(caosVM* vm) {
-	VM_PARAM_STRING_UNUSED(speech)
+	VM_PARAM_STRING(speech)
 	VM_PARAM_VALIDAGENT(creature)
 
 	valid_agent(vm->targ);
-	// TODO
+	speakCreatureToOne(vm, speech, creature.get());
 }
 
 /**
