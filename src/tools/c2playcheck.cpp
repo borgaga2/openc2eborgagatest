@@ -331,6 +331,21 @@ outv mins)");
 		}
 		if (!found_speech_bubble)
 			throw Exception("C2 SAY$ did not create the requested speech bubble");
+		const std::array<std::array<const char*, 2>, 4> order_speeches = {{
+			{{"targ ownr ordr shou \"order-shou\"", "order-shou"}},
+			{{"targ ownr ordr sign \"order-sign\"", "order-sign"}},
+			{{"targ ownr ordr tact \"order-tact\"", "order-tact"}},
+			{{"targ ownr ordr writ ownr \"order-writ\"", "order-writ"}},
+		}};
+		for (const auto& [script_source, speech] : order_speeches) {
+			(void)run_c2_agent_script(script_source);
+			const bool found_order_bubble = std::any_of(world.agents.begin(), world.agents.end(), [speech](const std::shared_ptr<Agent>& candidate) {
+				auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
+				return bubble && bubble->getText() == speech;
+			});
+			if (!found_order_bubble)
+				throw Exception(fmt::format("C2 ORDR did not create the requested {} speech bubble", speech));
+		}
 		unsigned int most_pressing_drive = 0;
 		for (unsigned int drive = 1; drive < 17; ++drive) {
 			if (creature->getDrive(drive) > creature->getDrive(most_pressing_drive))
