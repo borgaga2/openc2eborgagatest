@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-TEST(SDLMixerBackend, StoppedCallbacksDuringChannelUpdates) {
+static std::array<uint8_t, 76> silent_wav() {
 	// A short, silent 8-bit mono WAV. No installed game assets are needed.
 	std::array<uint8_t, 76> wav = {
 		'R', 'I', 'F', 'F', 68, 0, 0, 0, 'W', 'A', 'V', 'E',
@@ -14,6 +14,28 @@ TEST(SDLMixerBackend, StoppedCallbacksDuringChannelUpdates) {
 		0x40, 0x1f, 0, 0, 0x40, 0x1f, 0, 0, 1, 0, 8, 0,
 		'd', 'a', 't', 'a', 32, 0, 0, 0};
 	std::fill(wav.begin() + 44, wav.end(), 128);
+	return wav;
+}
+
+TEST(SDLMixerBackend, LoopingAudioSurvivesPastTheEndOfItsInput) {
+	const auto wav = silent_wav();
+	auto* audio = SDLMixerBackend::get_instance();
+	audio->init();
+	auto looping = audio->play_wav_data("looping-test", wav.data(), wav.size(), true);
+	auto one_shot = audio->play_wav_data("one-shot-test", wav.data(), wav.size(), false);
+	EXPECT_TRUE(looping);
+	EXPECT_TRUE(one_shot);
+	SDL_Delay(100); // the input is only four milliseconds long
+	EXPECT_EQ(audio->audio_channel_get_state(looping), AUDIO_PLAYING);
+	EXPECT_EQ(audio->audio_channel_get_state(one_shot), AUDIO_STOPPED);
+	audio->audio_channel_stop(looping);
+	SDL_Delay(100);
+	EXPECT_EQ(audio->audio_channel_get_state(looping), AUDIO_STOPPED);
+	audio->shutdown();
+}
+
+TEST(SDLMixerBackend, StoppedCallbacksDuringChannelUpdates) {
+	const auto wav = silent_wav();
 	auto* audio = SDLMixerBackend::get_instance();
 	// Repeat initialization too, including shutdown with a looping track active.
 	for (int cycle = 0; cycle < 2; ++cycle) {

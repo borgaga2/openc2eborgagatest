@@ -246,8 +246,15 @@ static AudioChannel play_sdl_io(const std::string& name, const std::string& shor
 	}
 	MIX_SetTrackAudio(track.get(), audio.get());
 
+	SDL_PropertiesID play_options = 0;
 	if (looping) {
-		MIX_SetTrackLoops(track.get(), -1);
+		play_options = SDL_CreateProperties();
+		if (!play_options || !SDL_SetNumberProperty(play_options, MIX_PROP_PLAY_LOOPS_NUMBER, -1)) {
+			printf("* SDLMixer: error setting loop playback for %s: %s\n", name.c_str(), SDL_GetError());
+			if (play_options)
+				SDL_DestroyProperties(play_options);
+			return {};
+		}
 	}
 
 	auto channel = track_to_audio_channel(std::move(track));
@@ -257,9 +264,13 @@ static AudioChannel play_sdl_io(const std::string& name, const std::string& shor
 	audio_channel_set_pan(channel, 0.0f);
 
 	// now start the track
-	audio_channel_to_track(channel, [](auto* playing_track) {
-		MIX_PlayTrack(playing_track, 0);
+	// MIX_PlayTrack resets the loop count, so it must be provided as a play
+	// option instead of setting MIX_SetTrackLoops before starting the track.
+	audio_channel_to_track(channel, [play_options](auto* playing_track) {
+		MIX_PlayTrack(playing_track, play_options);
 	});
+	if (play_options)
+		SDL_DestroyProperties(play_options);
 
 	fmt::print("INFO [SDLMixer] Playing {} format={}/{}Hz/{}{}\n", shortname, spec.channels, spec.freq, sdl_audioformat_to_string(spec.format), looping ? " looping=true" : "");
 
