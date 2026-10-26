@@ -146,7 +146,8 @@ class oldBrain {
 	// Update a loaded record, retaining state the runtime does not yet decode.
 	void updateC2State(sfc::CBrainV2&) const;
 
-	void processInstinct(creatureInstinctGene& instinct);
+	// False means C2 must keep the instinct queued and retry it later.
+	bool processInstinct(const creatureInstinctGene& instinct);
 
 	oldLobe* getLobeByTissue(unsigned int id);
 	oldCreature* getParent() { return parent; }

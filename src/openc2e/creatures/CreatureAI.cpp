@@ -40,9 +40,20 @@ void oldCreature::tickBrain() {
 	}
 
 	if (dreaming) {
-		// C2's DREA processes each instinct over roughly five seconds. At ten
-		// world ticks per second, keep the creature asleep and insensible for 50
-		// ticks after each instinct is applied.
+		if (genome->getVersion() == 2) {
+			// Installed C2 uses the direct wiring path (41e6a0 -> 41ab20),
+			// not the older, phased training routine. Babies exhaust the queue;
+			// older creatures consume the requested limit one instinct at a time.
+			if (dreamInstinctsRemaining && getNoUnprocessedInstincts()) {
+				const unsigned int processed = processInstincts(1);
+				if (stage != baby)
+					dreamInstinctsRemaining -= processed;
+			}
+			if (!dreamInstinctsRemaining || !getNoUnprocessedInstincts())
+				setDreaming(false);
+			return;
+		}
+		// Retain the existing C1 timing until its original behavior is checked.
 		if (dreamTicksRemaining > 0) {
 			--dreamTicksRemaining;
 			if (dreamTicksRemaining > 0)

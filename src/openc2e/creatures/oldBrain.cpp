@@ -1070,7 +1070,20 @@ oldLobe* oldBrain::getLobeByTissue(unsigned int id) {
 	return lobes[id];
 }
 
-void oldBrain::processInstinct(creatureInstinctGene& instinct) {
+bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
+	const bool c2 = parent->getGenome()->getVersion() == 2;
+	// C2 folds expressed lobe/action/cell values to their native ranges.
+	// Work on a copy: expression must never rewrite inherited DNA.
+	auto instinct = gene;
+	if (c2) {
+		instinct.action &= 15;
+		for (unsigned int i = 0; i < 3; ++i) {
+			instinct.lobes[i] &= 7;
+			const auto lobe = instinct.lobes[i];
+			if (lobe < lobes.size() && lobes[lobe]->getNoNeurons())
+				instinct.neurons[i] %= lobes[lobe]->getNoNeurons();
+		}
+	}
 	// work out *true* source lobe
 	unsigned int srclobe[3] = {0, 0, 0};
 	for (unsigned int i = 0; i < 3; i++) {
@@ -1086,14 +1099,19 @@ void oldBrain::processInstinct(creatureInstinctGene& instinct) {
 			// perceptible! we can use this
 			srclobe[i] = instinct.lobes[i];
 		} else {
-			// lobe is not perceptible; try finding a lobe which
-			// feeds from it which *is* perceptible
+			// Find a relay lobe. C2 requires the native size/input checks;
+			// C1 retains its existing perceptible-relay search.
 			for (unsigned int j = 1; j < lobes.size(); j++) {
-				if (!lobes[j]->getGene()->perceptflag)
+				const auto& candidate = *lobes[j]->getGene();
+				if (c2) {
+					// 41ab20 requires the same cell count and an enabled input.
+					if (lobes[j]->getNoNeurons() != lobes[instinct.lobes[i]]->getNoNeurons())
+						continue;
+				} else if (!candidate.perceptflag) {
 					continue;
-				// TODO: check max connections too?
-				if (lobes[j]->getGene()->dendrite1.srclobe == instinct.lobes[i] ||
-					lobes[j]->getGene()->dendrite2.srclobe == instinct.lobes[i]) {
+				}
+				if ((candidate.dendrite1.srclobe == instinct.lobes[i] && (!c2 || candidate.dendrite1.max)) ||
+					(candidate.dendrite2.srclobe == instinct.lobes[i] && (!c2 || candidate.dendrite2.max))) {
 					srclobe[i] = j;
 					break;
 				}
@@ -1131,27 +1149,29 @@ void oldBrain::processInstinct(creatureInstinctGene& instinct) {
 				(int)instinct.lobes[i],
 				(int)srclobe[i],
 				(int)instinct.neurons[i]);
+			if (c2)
+				return true; // C2 rejects the whole invalid wiring request.
 			continue;
 		}
 		percept_neu_offsets.push_back(offset);
 	}
 
 	// were there no valid lobes? then we're done
-	if (!percept_neu_offsets.size()) {
+	if (!c2 && !percept_neu_offsets.size()) {
 		fmt::print("instinct failed: no valid lobes\n");
-		return;
+		return true;
 	}
 
 	// we need a concept lobe (lobe 8) for instincts to work
 	if (lobes.size() < 9) {
 		fmt::print("instinct failed: no concept lobe\n");
-		return;
+		return true;
 	}
 	if (instinct.action >= lobes[6]->getNoNeurons()) {
 		fmt::print(
 			"instinct failed: decision neuron {} is outside the decision lobe\n",
 			static_cast<unsigned int>(instinct.action));
-		return;
+		return true;
 	}
 	// TODO: verify the concept lobe does actually have type 0 dendrites pointing at the perceptible lobe?
 
@@ -1183,7 +1203,7 @@ void oldBrain::processInstinct(creatureInstinctGene& instinct) {
 		fmt::print(
 			"instinct failed: no candidate concept neuron with {} type 0 dendrites\n",
 			(int)percept_neu_offsets.size());
-		return;
+		return true;
 	}
 
 	// connect the discovered concept neuron to the relevant perceptible neurons
@@ -1191,6 +1211,8 @@ void oldBrain::processInstinct(creatureInstinctGene& instinct) {
 	for (unsigned int i = 0; i < percept_neu_offsets.size(); i++) {
 		oldDendrite& dend = conceptneu->dendrites[0][i];
 		dend.ltw = dend.stw = dend.strength = instinct.level;
+		if (c2)
+			dend.home_x = dend.home_y = dend.suscept = 0;
 		// in theory thanks to earlier sanity checks, all percept_neu_offsets should be in range
 		dend.src = lobes[0]->getNeuron(percept_neu_offsets[i]);
 	}
@@ -1220,13 +1242,16 @@ void oldBrain::processInstinct(creatureInstinctGene& instinct) {
 	if (candidatedendrite == 0xFFFFFFFF) {
 		// brain can't learn this!
 		fmt::print("instinct failed: no candidate decision dendrite (!)\n");
-		return;
+		return !c2;
 	}
 
 	// finally, wire the concept neuron up to the relevant decision
 	oldDendrite& dend = decnneu->dendrites[type][candidatedendrite];
 	dend.ltw = dend.stw = dend.strength = instinct.level;
 	dend.src = conceptneu;
+	if (c2)
+		dend.home_x = dend.home_y = dend.suscept = 0;
+	return true;
 }
 
 /* vim: set noet: */

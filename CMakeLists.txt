@@ -397,6 +397,7 @@ add_executable(test_openc2e
 	src/openc2e/tests/C2OrganStateTest.cpp
 	src/openc2e/tests/C2BiochemistryStateTest.cpp
 	src/openc2e/tests/C2PhysiologyStateTest.cpp
+	src/openc2e/tests/C2InstinctTest.cpp
 )
 target_include_directories(test_openc2e PRIVATE src/openc2e)
 target_link_libraries(test_openc2e openc2e_core gtest_main)

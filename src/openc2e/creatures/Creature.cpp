@@ -259,8 +259,9 @@ unsigned int oldCreature::processInstincts(unsigned int count) {
 	unsigned int processed = 0;
 	while (processed < count && !unprocessedinstincts.empty()) {
 		creatureInstinctGene* instinct = unprocessedinstincts.front();
+		if (!brain->processInstinct(*instinct))
+			break;
 		unprocessedinstincts.pop_front();
-		brain->processInstinct(*instinct);
 		++processed;
 	}
 	return processed;
@@ -474,9 +475,12 @@ void c2Creature::tick() {
 		senses[5] = static_cast<unsigned char>(crowdedness);
 	}
 
+	const bool learning_instincts = dreaming;
 	tickBrain();
-	// TODO: update brain organ every 0.4ms (ie: when brain is processed)!
-	tickBiochemistry();
+	// C2's normal chemistry sample is suspended while instincts are wired.
+	// TODO: update the brain organ when the normal brain is processed.
+	if (!learning_instincts)
+		tickBiochemistry();
 
 	// lifestage checks
 	for (unsigned int i = 0; i < 7; i++) {

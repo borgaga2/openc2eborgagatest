@@ -109,8 +109,8 @@ void c1Creature::tickBiochemistry() {
 }
 
 void c2Creature::tickBiochemistry() {
-	// TODO: untested
-
+	if (dreaming)
+		return;
 	if ((ticks % 2) != 0)
 		return; // every 2 ticks (0.2s)
 
