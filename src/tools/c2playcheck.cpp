@@ -11,6 +11,8 @@
 #include "fileformats/C2EggFile.h"
 #include "fileformats/genomeFile.h"
 #include "fileformats/sfc/C2SFCFile.h"
+#include "fileformats/sfc/C2CreatureData.h"
+#include "fileformats/MFCWriter.h"
 #include "openc2e/Engine.h"
 #include "openc2e/Map.h"
 #include "openc2e/PointerAgent.h"
@@ -52,8 +54,8 @@ static int32_t monikerToken(const std::string& moniker) {
 // An opt-in integration check against a user's installed C2 assets. It runs
 // the real world, scripts, skeleton and biochemistry with the null renderer.
 int main(int argc, char** argv) {
-	if (argc != 2) {
-		fmt::print(stderr, "USAGE: {} CREATURES_2_DATA_DIRECTORY\n", argv[0]);
+	if (argc != 2 && argc != 4) {
+		fmt::print(stderr, "USAGE: {} CREATURES_2_DATA_DIRECTORY [SAVED_WORLD GENETICS_DIRECTORY]\n", argv[0]);
 		return 1;
 	}
 	bool initialized = false;
@@ -82,6 +84,50 @@ int main(int argc, char** argv) {
 		fmt::print("C2 world archive check passed: {} room slots, {} objects, {} sceneries, {} macros, {} unknown tail bytes\n",
 			world_archive.map->rooms.size(), world_archive.objects.size(), world_archive.sceneries.size(),
 			world_archive.script_state.macros.size(), world_archive.trailing_data.size());
+		if (argc == 4) {
+			auto saved_world = sfc::read_c2_sfc_file(std::filesystem::path(argv[2]));
+			size_t checked = 0, neurons = 0, connections = 0;
+			const auto encode_brain = [](const sfc::CBrainV2& brain) {
+				VectorWriter output;
+				MFCWriter writer(output);
+				sfc::register_c2_brain_class(writer);
+				writer(std::make_shared<sfc::CBrainV2>(brain));
+				return output.vector();
+			};
+			for (const auto& object : saved_world.objects) {
+				auto saved = std::dynamic_pointer_cast<sfc::CreatureV2>(object);
+				if (!saved)
+					continue;
+				if (saved->moniker.size() != 4 || saved->moniker.find_first_not_of(
+					"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") != std::string::npos)
+					throw Exception("Saved C2 creature has an invalid moniker");
+				FileReader genetics(std::filesystem::path(argv[3]) / (saved->moniker + ".gen"));
+				auto saved_genome = std::make_shared<genomeFile>();
+				genetics >> *saved_genome;
+				if (saved_genome->getVersion() != 2 || !saved->brain)
+					throw Exception("Saved creature is missing its C2 genome or brain");
+				SkeletalCreature holder(4);
+				c2Creature restored(saved_genome, saved->sex == 2, 0, &holder);
+				auto& brain = *restored.getBrain();
+				brain.restoreC2State(*saved->brain);
+				auto captured = *saved->brain;
+				brain.updateC2State(captured);
+				if (encode_brain(captured) != encode_brain(*saved->brain))
+					throw Exception("Restored C2 brain did not preserve every saved state byte");
+				for (unsigned int tick = 0; tick < 8; ++tick)
+					brain.tick();
+				brain.updateC2State(captured);
+				brain.restoreC2State(captured);
+				brain.tick();
+				++checked;
+				neurons += saved->brain->neurons.size();
+				for (const auto& neuron : saved->brain->neurons)
+					connections += neuron.dendrites0.size() + neuron.dendrites1.size();
+			}
+			if (!checked)
+				throw Exception("The optional saved C2 world contained no creatures");
+			fmt::print("C2 saved brain check passed: {} creatures, {} neurons, {} learned connections\n", checked, neurons, connections);
+		}
 		const auto egg_directory = findMainDirectoryFile("Eggs");
 		size_t eggs_checked = 0;
 		size_t different_parent_eggs = 0;

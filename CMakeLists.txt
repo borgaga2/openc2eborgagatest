@@ -331,6 +331,7 @@ add_library(openc2e_core OBJECT
 	src/openc2e/net/socket.cpp
 	src/openc2e/NetBackend.cpp
 	src/openc2e/creatures/oldBrain.cpp
+	src/openc2e/creatures/C2BrainState.cpp
 	src/openc2e/parseException.cpp
 	src/openc2e/partzorder.cpp
 	src/openc2e/PathResolver.cpp
@@ -389,7 +390,9 @@ endif()
 add_executable(test_openc2e
 	src/openc2e/tests/CaosTest.cpp
 	src/openc2e/tests/SFCFileTest.cpp
+	src/openc2e/tests/C2BrainStateTest.cpp
 )
+target_include_directories(test_openc2e PRIVATE src/openc2e)
 target_link_libraries(test_openc2e openc2e_core gtest_main)
 if (WIN32)
 	target_link_libraries(test_openc2e ws2_32 dbghelp)

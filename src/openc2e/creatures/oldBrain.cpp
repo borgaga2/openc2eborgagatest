@@ -813,7 +813,7 @@ void oldLobe::neuronTryMigration(unsigned int type, oldNeuron& neu, oldLobe* src
 	if (d != neu.dendrites[type].size())
 		return;
 
-	connectDendrite(type, dend, &neu);
+	connectDendrite(type, dend, srcneu);
 
 	if (loose_dendrites[type])
 		loose_dendrites[type]--;

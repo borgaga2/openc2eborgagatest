@@ -23,8 +23,13 @@
 #include "fileformats/genomeFile.h"
 
 #include <map>
+#include <memory>
 #include <stdint.h>
 #include <set>
+
+namespace sfc {
+struct CBrainV2;
+}
 
 struct oldSVRule {
 	unsigned int length;
@@ -36,12 +41,14 @@ struct oldSVRule {
 struct oldDendrite {
 	struct oldNeuron* src;
 	unsigned char strength, stw, ltw, suscept;
+	unsigned char home_x = 0, home_y = 0;
 };
 
 struct oldNeuron {
 	unsigned char state, output, leakin, leakout;
 	std::vector<oldDendrite> dendrites[2];
 	unsigned char percept_src;
+	unsigned char wta_disable = 0;
 	oldNeuron() {
 		state = 0;
 		output = 0;
@@ -53,9 +60,12 @@ struct oldNeuron {
 };
 
 class oldLobe {
+	friend class oldBrain;
+
   protected:
 	class oldBrain* parent;
 	oldBrainLobeGene* ourGene;
+	std::unique_ptr<oldBrainLobeGene> restored_gene;
 	std::vector<oldNeuron> neurons;
 	oldLobe* sourceLobe[2];
 	bool inited;
@@ -130,6 +140,11 @@ class oldBrain {
 	void tick();
 	void processGenes();
 	void init();
+
+	// Restore into an existing C2 brain without reconnecting or ticking it.
+	void restoreC2State(const sfc::CBrainV2&);
+	// Update a loaded record, retaining state the runtime does not yet decode.
+	void updateC2State(sfc::CBrainV2&) const;
 
 	void processInstinct(creatureInstinctGene& instinct);
 
