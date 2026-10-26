@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
 			world_archive.script_state.macros.size(), world_archive.trailing_data.size());
 		if (argc == 4) {
 			auto saved_world = sfc::read_c2_sfc_file(std::filesystem::path(argv[2]));
-			size_t checked = 0, neurons = 0, connections = 0;
+			size_t checked = 0, neurons = 0, connections = 0, organs_checked = 0;
 			const auto encode_brain = [](const sfc::CBrainV2& brain) {
 				VectorWriter output;
 				MFCWriter writer(output);
@@ -119,6 +119,30 @@ int main(int argc, char** argv) {
 				brain.updateC2State(captured);
 				brain.restoreC2State(captured);
 				brain.tick();
+				organGene* organ_prototype = nullptr;
+				for (const auto& candidate : saved_genome->genes)
+					if (auto* organ = dynamic_cast<organGene*>(candidate.get()); organ && !organ->isBrain()) {
+						organ_prototype = organ;
+						break;
+					}
+				if (!organ_prototype || !saved->biochemistry)
+					throw Exception("Saved creature has no C2 organ prototype or chemistry");
+				// Check the mapped organ header values only; this does not restore
+				// the saved receptor, emitter or reaction networks.
+				const auto check_organ = [&](const sfc::COrganV2& record) {
+					c2Organ organ(&restored, organ_prototype);
+					organ.processGenes();
+					organ.restoreC2State(record);
+					auto captured_organ = record;
+					organ.updateC2State(captured_organ);
+					if (captured_organ.state != record.state)
+						throw Exception("Restored C2 organ did not preserve its saved mutable values");
+					++organs_checked;
+				};
+				check_organ(*saved->brain);
+				for (const auto& organ : saved->biochemistry->organs)
+					if (organ)
+						check_organ(*organ);
 				++checked;
 				neurons += saved->brain->neurons.size();
 				for (const auto& neuron : saved->brain->neurons)
@@ -127,6 +151,7 @@ int main(int argc, char** argv) {
 			if (!checked)
 				throw Exception("The optional saved C2 world contained no creatures");
 			fmt::print("C2 saved brain check passed: {} creatures, {} neurons, {} learned connections\n", checked, neurons, connections);
+			fmt::print("C2 saved organ state check passed: {} records\n", organs_checked);
 		}
 		const auto egg_directory = findMainDirectoryFile("Eggs");
 		size_t eggs_checked = 0;

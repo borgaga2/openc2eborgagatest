@@ -25,6 +25,10 @@
 #include <cassert>
 #include <memory>
 
+namespace sfc {
+struct COrganV2;
+}
+
 // c1/c2
 
 class oldCreature : public Creature {
@@ -176,7 +180,7 @@ class c2Organ {
 	size_t processedGeneCount = 0;
 
 	// data
-	unsigned char energycost, atpdamagecoefficient;
+	unsigned int energycost, atpdamagecoefficient;
 
 	// variables
 	float lifeforce, shorttermlifeforce, longtermlifeforce;
@@ -202,18 +206,20 @@ class c2Organ {
 	unsigned char getClockRate() { return clockrate; }
 	unsigned char getRepairRate() { return repairrate; }
 	unsigned char getDamageRate() { return damagerate; }
-	unsigned char getEnergyCost() { return energycost; }
+	unsigned int getEnergyCost() { return energycost; }
 	unsigned char getInjuryToApply() { return injurytoapply; }
 	float getInitialLifeforce() { return lifeforce; }
 	float getShortTermLifeforce() { return shorttermlifeforce; }
 	float getLongTermLifeforce() { return longtermlifeforce; }
-	unsigned char getATPDamageCoefficient() { return atpdamagecoefficient; }
+	unsigned int getATPDamageCoefficient() { return atpdamagecoefficient; }
 
 	size_t getReceptorCount() { return receptors.size(); }
 	size_t getEmitterCount() { return emitters.size(); }
 	size_t getReactionCount() { return reactions.size(); }
 
 	void applyInjury(float);
+	void restoreC2State(const sfc::COrganV2&);
+	void updateC2State(sfc::COrganV2&) const;
 
 	std::vector<gene*> genes;
 };

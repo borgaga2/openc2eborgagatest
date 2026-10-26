@@ -22,6 +22,7 @@
 #include "oldBrain.h"
 #include "oldCreature.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath> // powf
 #include <fmt/core.h>
@@ -459,7 +460,7 @@ c2Organ::c2Organ(c2Creature* p, organGene* g) {
 	assert(parent);
 	ourGene = g;
 	assert(ourGene);
-	lifeforce = ourGene->lifeforce * (1000000.0f / 255.0f);
+	lifeforce = std::max<unsigned int>(1, ourGene->lifeforce) * 1000000.0f / 255.0f;
 	longtermlifeforce = shorttermlifeforce = lifeforce;
 
 	biochemticks = 0;
@@ -468,8 +469,10 @@ c2Organ::c2Organ(c2Creature* p, organGene* g) {
 	clockrate = ourGene->clockrate;
 	injurytoapply = 0;
 	damagerate = ourGene->damagerate;
-	biotick = 0;
-	atpdamagecoefficient = ourGene->atpdamagecoefficient * (lifeforce / (255.0f * 255.0f));
+	// C2 stores the genome's start byte as the initial clock phase.
+	biotick = ourGene->biotickstart;
+	atpdamagecoefficient = static_cast<unsigned int>(
+		(std::max<unsigned int>(1, ourGene->atpdamagecoefficient) * lifeforce) / 255.0);
 
 	clockratereceptors = repairratereceptors = injuryreceptors = 0;
 }
@@ -541,11 +544,8 @@ void c2Organ::tick() {
 	 * Brain Organ is only processed when the brain is (ie: half the speed of biochem)
 	 */
 	if (biotick >= 255) {
-		biotick -= 255;
+		biotick %= 255;
 		biochemticks++;
-
-		// TODO: is this the correct way to handle biotickstart?
-		//if (biochemticks < ourGene->biotickstart) return;
 
 		ticked = true;
 
@@ -586,12 +586,13 @@ void c2Organ::tick() {
 
 		// Injury receptors store a byte-sized amount for this organ's next
 		// activation. Convert it to the organ's life-force scale before applying.
-		if (injurytoapply != 0)
-			applyInjury(injurytoapply * (lifeforce / (255.0f * 255.0f)));
+		if (injurytoapply != 0) {
+			const float scaled_injury = static_cast<float>(injurytoapply * lifeforce / 255.0);
+			applyInjury(static_cast<unsigned int>(scaled_injury / 10.0f));
+			injurytoapply = 0;
+		}
 	}
 
-	// TODO: ensure we've ticked at least once
-	//if (biochemticks < ourGene->biotickstart) return;
 	if (biochemticks == 0)
 		return;
 
