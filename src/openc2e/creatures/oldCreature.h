@@ -25,10 +25,19 @@
 #include <array>
 #include <cassert>
 #include <memory>
+#include <unordered_map>
 
 namespace sfc {
 struct COrganV2;
+struct CBiochemistryV2;
+struct ReceptorV2;
 }
+
+// Share this context across organs when restoring/capturing a complete graph.
+struct C2ReceptorStateContext {
+	std::unordered_map<const sfc::ReceptorV2*, std::shared_ptr<uint8_t>> restored;
+	std::unordered_map<const uint8_t*, std::shared_ptr<sfc::ReceptorV2>> captured;
+};
 
 // c1/c2
 
@@ -176,17 +185,17 @@ class c2Organ {
 	friend struct c2Emitter;
 
 	class c2Creature* parent;
-	organGene* ourGene;
 
 	std::vector<std::shared_ptr<c2Reaction> > reactions;
 	std::vector<c2Receptor> receptors;
 	std::vector<c2Emitter> emitters;
 	std::vector<std::vector<size_t>> receptor_groups;
-	std::vector<size_t> receptor_identities;
+	std::vector<std::shared_ptr<uint8_t>> receptor_identities;
 	size_t processedGeneCount = 0;
 
 	// data
 	unsigned int energycost, atpdamagecoefficient;
+	uint32_t identity = 0;
 
 	// variables
 	float lifeforce, shorttermlifeforce, longtermlifeforce;
@@ -207,6 +216,7 @@ class c2Organ {
 
   public:
 	c2Organ(c2Creature* p, organGene* g);
+	c2Organ(c2Creature* p, const sfc::COrganV2&, C2ReceptorStateContext* = nullptr);
 	void tick();
 
 	void processGenes();
@@ -226,8 +236,8 @@ class c2Organ {
 	size_t getReactionCount() { return reactions.size(); }
 
 	void applyInjury(float);
-	void restoreC2State(const sfc::COrganV2&);
-	void updateC2State(sfc::COrganV2&) const;
+	void restoreC2State(const sfc::COrganV2&, C2ReceptorStateContext* = nullptr);
+	void updateC2State(sfc::COrganV2&, C2ReceptorStateContext* = nullptr) const;
 
 	std::vector<gene*> genes;
 };
@@ -236,6 +246,10 @@ class c2Creature : public oldCreature {
   protected:
 	// biochemistry
 	std::vector<std::shared_ptr<c2Organ> > organs;
+	std::array<uint8_t, 256> chemical_decay{};
+	uint32_t stored_organ_count = 0;
+	uint8_t retained_biochemistry_state = 0;
+	std::vector<std::shared_ptr<const sfc::COrganV2>> retained_organs;
 
 	// loci
 	unsigned char senses[14];
@@ -249,6 +263,9 @@ class c2Creature : public oldCreature {
 
   public:
 	c2Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a);
+	void restoreC2Biochemistry(const sfc::CBiochemistryV2&, uint32_t biotick);
+	void updateC2Biochemistry(sfc::CBiochemistryV2&) const;
+	uint32_t getBiochemistryTicks() const { return biochemticks; }
 
 	void tick();
 

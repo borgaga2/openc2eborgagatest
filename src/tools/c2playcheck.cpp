@@ -51,6 +51,12 @@ static int32_t monikerToken(const std::string& moniker) {
 	return signed_token;
 }
 
+class SavedC2CreatureCheck : public c2Creature {
+  public:
+	using c2Creature::c2Creature;
+	void sampleBiochemistry() { tickBiochemistry(); }
+};
+
 // An opt-in integration check against a user's installed C2 assets. It runs
 // the real world, scripts, skeleton and biochemistry with the null renderer.
 int main(int argc, char** argv) {
@@ -88,6 +94,17 @@ int main(int argc, char** argv) {
 			auto saved_world = sfc::read_c2_sfc_file(std::filesystem::path(argv[2]));
 			size_t checked = 0, neurons = 0, connections = 0, organs_checked = 0;
 			size_t receptors_checked = 0, emitters_checked = 0, reactions_checked = 0;
+			size_t biochemistries_checked = 0;
+			const auto encode_biochemistry = [](const sfc::CBiochemistryV2& biology) {
+				VectorWriter output;
+				MFCWriter writer(output);
+				sfc::register_c2_brain_class(writer);
+				sfc::register_c2_biochemistry_classes(writer);
+				auto record = biology;
+				record.owner = nullptr; // compare this component without serializing its world owner
+				writer(&record);
+				return output.vector();
+			};
 			const auto encode_organ = [](const sfc::COrganV2& organ) {
 				VectorWriter output;
 				MFCWriter writer(output);
@@ -116,7 +133,7 @@ int main(int argc, char** argv) {
 				if (saved_genome->getVersion() != 2 || !saved->brain)
 					throw Exception("Saved creature is missing its C2 genome or brain");
 				SkeletalCreature holder(4);
-				c2Creature restored(saved_genome, saved->sex == 2, 0, &holder);
+				SavedC2CreatureCheck restored(saved_genome, saved->sex == 2, 0, &holder);
 				auto& brain = *restored.getBrain();
 				brain.restoreC2State(*saved->brain);
 				auto captured = *saved->brain;
@@ -128,20 +145,12 @@ int main(int argc, char** argv) {
 				brain.updateC2State(captured);
 				brain.restoreC2State(captured);
 				brain.tick();
-				organGene* organ_prototype = nullptr;
-				for (const auto& candidate : saved_genome->genes)
-					if (auto* organ = dynamic_cast<organGene*>(candidate.get()); organ && !organ->isBrain()) {
-						organ_prototype = organ;
-						break;
-					}
-				if (!organ_prototype || !saved->biochemistry)
-					throw Exception("Saved creature has no C2 organ prototype or chemistry");
+				if (!saved->biochemistry)
+					throw Exception("Saved creature has no C2 chemistry");
 				// Restore each saved network independently, then exercise it against
 				// the saved chemical concentrations. Full world loading is separate.
 				const auto check_organ = [&](const sfc::COrganV2& record) {
-					c2Organ organ(&restored, organ_prototype);
-					organ.processGenes();
-					organ.restoreC2State(record);
+					c2Organ organ(&restored, record);
 					auto captured_organ = record;
 					captured_organ.receptor_groups.clear();
 					captured_organ.emitters.clear();
@@ -167,6 +176,23 @@ int main(int argc, char** argv) {
 				for (const auto& organ : saved->biochemistry->organs)
 					if (organ)
 						check_organ(*organ);
+				// The restored brain must be in place before binding the whole body.
+				brain.restoreC2State(*saved->brain);
+				restored.restoreC2Biochemistry(*saved->biochemistry, saved->biotick);
+				sfc::CBiochemistryV2 captured_biology;
+				restored.updateC2Biochemistry(captured_biology);
+				if (encode_biochemistry(captured_biology) != encode_biochemistry(*saved->biochemistry) ||
+					restored.getBiochemistryTicks() != saved->biotick)
+					throw Exception("Restored C2 biochemistry did not preserve its full saved graph and timing");
+				for (unsigned int i = 0; i < 32; ++i)
+					restored.sampleBiochemistry();
+				brain.updateC2State(captured);
+				restored.updateC2Biochemistry(captured_biology);
+				const auto resumed_biotick = restored.getBiochemistryTicks();
+				brain.restoreC2State(captured);
+				restored.restoreC2Biochemistry(captured_biology, resumed_biotick);
+				restored.sampleBiochemistry();
+				++biochemistries_checked;
 				++checked;
 				neurons += saved->brain->neurons.size();
 				for (const auto& neuron : saved->brain->neurons)
@@ -177,6 +203,7 @@ int main(int argc, char** argv) {
 			fmt::print("C2 saved brain check passed: {} creatures, {} neurons, {} learned connections\n", checked, neurons, connections);
 			fmt::print("C2 saved organ state check passed: {} records, {} receptors, {} emitters, {} reactions\n",
 				organs_checked, receptors_checked, emitters_checked, reactions_checked);
+			fmt::print("C2 saved biochemistry graph check passed: {} creatures\n", biochemistries_checked);
 		}
 		const auto egg_directory = findMainDirectoryFile("Eggs");
 		size_t eggs_checked = 0;

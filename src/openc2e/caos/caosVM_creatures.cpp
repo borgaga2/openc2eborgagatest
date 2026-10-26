@@ -1611,6 +1611,10 @@ void v_ORGF(caosVM* vm) {
 
 	if (legacy) {
 		std::shared_ptr<c2Organ> o = legacy->getOrgan(organ);
+		if (!o) {
+			vm->result.setFloat(-1.0f);
+			return;
+		}
 		switch (value) {
 			case 0: vm->result.setFloat(o->getClockRate()); break;
 			case 1:
@@ -1978,6 +1982,8 @@ void c_INJR(caosVM* vm) {
 		return;
 
 	std::shared_ptr<c2Organ> target = creature->getOrgan(organ);
+	if (!target)
+		return;
 	// INJR's amount is 0..255, with 255 representing one tenth of the organ's
 	// initial life force.
 	float scaled_amount = std::max(0, std::min(255, amount)) * target->getInitialLifeforce() / 2550.0f;

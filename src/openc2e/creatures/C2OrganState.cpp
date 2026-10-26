@@ -37,7 +37,13 @@ void write_float(std::array<uint8_t, 34>& bytes, size_t offset, float value) {
 
 } // namespace
 
-void c2Organ::restoreC2State(const sfc::COrganV2& saved) {
+c2Organ::c2Organ(c2Creature* owner, const sfc::COrganV2& saved, C2ReceptorStateContext* context)
+	: parent(owner) {
+	assert(parent);
+	restoreC2State(saved, context);
+}
+
+void c2Organ::restoreC2State(const sfc::COrganV2& saved, C2ReceptorStateContext* context) {
 	const float initial = read_float(saved.state, 11);
 	const float short_term = read_float(saved.state, 15);
 	const float long_term = read_float(saved.state, 19);
@@ -51,8 +57,10 @@ void c2Organ::restoreC2State(const sfc::COrganV2& saved) {
 	// the network before replacing any live state; the actual genome is kept.
 	std::vector<c2Receptor> restored_receptors;
 	std::vector<std::vector<size_t>> restored_groups;
-	std::vector<size_t> restored_identities;
-	std::unordered_map<const sfc::ReceptorV2*, size_t> identities;
+	std::vector<std::shared_ptr<uint8_t>> restored_identities;
+	C2ReceptorStateContext local_context;
+	if (!context)
+		context = &local_context;
 	std::vector<c2Emitter> restored_emitters;
 	std::vector<std::shared_ptr<c2Reaction>> restored_reactions;
 	for (const auto& group : saved.receptor_groups) {
@@ -70,8 +78,10 @@ void c2Organ::restoreC2State(const sfc::COrganV2& saved) {
 				if (restored.organ != first.organ || restored.tissue != first.tissue || restored.locus_id != first.locus_id)
 					throw Exception("Saved C2 receptor group has different destinations");
 			}
-			auto identity = identities.try_emplace(receptor.get(), restored_receptors.size() - 1).first;
-			restored_identities.push_back(identity->second);
+			auto& identity = context->restored[receptor.get()];
+			if (!identity)
+				identity = std::make_shared<uint8_t>(0);
+			restored_identities.push_back(identity);
 			indices.push_back(restored_receptors.size() - 1);
 		}
 	}
@@ -92,6 +102,7 @@ void c2Organ::restoreC2State(const sfc::COrganV2& saved) {
 	receptor_identities.swap(restored_identities);
 	emitters.swap(restored_emitters);
 	reactions.swap(restored_reactions);
+	identity = read_u32(saved.state, 0);
 	lifeforce = initial;
 	shorttermlifeforce = short_term;
 	longtermlifeforce = long_term;
@@ -107,7 +118,8 @@ void c2Organ::restoreC2State(const sfc::COrganV2& saved) {
 	atpdamagecoefficient = read_u32(saved.state, 30);
 }
 
-void c2Organ::updateC2State(sfc::COrganV2& saved) const {
+void c2Organ::updateC2State(sfc::COrganV2& saved, C2ReceptorStateContext* context) const {
+	write_u32(saved.state, 0, identity);
 	write_float(saved.state, 11, lifeforce);
 	write_float(saved.state, 15, shorttermlifeforce);
 	write_float(saved.state, 19, longtermlifeforce);
@@ -122,17 +134,18 @@ void c2Organ::updateC2State(sfc::COrganV2& saved) const {
 	write_u32(saved.state, 26, energycost);
 	write_u32(saved.state, 30, atpdamagecoefficient);
 	saved.receptor_groups.resize(receptor_groups.size());
-	std::unordered_map<size_t, std::shared_ptr<sfc::ReceptorV2>> captured_receptors;
+	C2ReceptorStateContext local_context;
+	if (!context)
+		context = &local_context;
 	for (size_t i = 0; i < receptor_groups.size(); ++i) {
 		auto& group = saved.receptor_groups[i];
 		group.resize(receptor_groups[i].size());
 		for (size_t j = 0; j < group.size(); ++j) {
 			const size_t index = receptor_groups[i][j];
-			auto& captured = captured_receptors[receptor_identities[index]];
-			if (!captured) {
+			auto& captured = context->captured[receptor_identities[index].get()];
+			if (!captured)
 				captured = std::make_shared<sfc::ReceptorV2>();
-				captured->state = receptors[index].parameters();
-			}
+			captured->state = receptors[index].parameters();
 			group[j] = captured;
 		}
 	}

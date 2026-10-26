@@ -116,10 +116,17 @@ void c2Creature::tickBiochemistry() {
 
 	// tick organs
 	for (auto& organ : organs) {
-		organ->tick();
+		if (organ)
+			organ->tick();
 	}
 
-	oldCreature::tickBiochemistry();
+	for (unsigned int i = 0; i < 256; ++i) {
+		const unsigned char rate = chemical_decay[i] / 8;
+		const unsigned int mask = calculateTickMask(rate);
+		if ((biochemticks & mask) == mask)
+			chemicals[i] = (chemicals[i] * calculateMultiplier(rate)) / 65536;
+	}
+	++biochemticks;
 }
 
 void oldCreature::tickBiochemistry() {
@@ -458,24 +465,23 @@ float* c2eCreature::getLocusPointer(bool receptor, unsigned char o, unsigned cha
 c2Organ::c2Organ(c2Creature* p, organGene* g) {
 	parent = p;
 	assert(parent);
-	ourGene = g;
-	assert(ourGene);
-	lifeforce = std::max<unsigned int>(1, ourGene->lifeforce) * 1000000.0f / 255.0f;
+	assert(g);
+	lifeforce = std::max<unsigned int>(1, g->lifeforce) * 1000000.0f / 255.0f;
 	longtermlifeforce = shorttermlifeforce = lifeforce;
 
 	biochemticks = 0;
 	energycost = 2;
 
 	repairrate = 0;
-	clockrate = ourGene->clockrate;
+	clockrate = g->clockrate;
 	injurytoapply = 0;
-	damagerate = ourGene->damagerate;
+	damagerate = g->damagerate;
 	// C2 stores the genome's start byte as the initial clock phase.
-	biotick = ourGene->biotickstart;
+	biotick = g->biotickstart;
 	atpdamagecoefficient = static_cast<unsigned int>(
-		(std::max<unsigned int>(1, ourGene->atpdamagecoefficient) * lifeforce) / 255.0);
+		(std::max<unsigned int>(1, g->atpdamagecoefficient) * lifeforce) / 255.0);
 
-	cached_health = std::max<unsigned int>(1, ourGene->lifeforce);
+	cached_health = std::max<unsigned int>(1, g->lifeforce);
 	energy_gate = 1;
 }
 
@@ -512,7 +518,7 @@ void c2Organ::processGenes() {
 				*previous = emitter;
 		} else if (typeid(*g) == typeid(bioReceptorGene)) {
 			receptors.push_back(c2Receptor((bioReceptorGene*)g, this));
-			receptor_identities.push_back(receptor_identities.size());
+			receptor_identities.push_back(std::make_shared<uint8_t>(0));
 		}
 	}
 	groupReceptors();

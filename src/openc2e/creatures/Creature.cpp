@@ -27,6 +27,7 @@
 #include "c2eBrain.h"
 #include "c2eCreature.h"
 #include "common/throw_ifnot.h"
+#include "common/NumericCast.h"
 #include "historyManager.h"
 #include "oldBrain.h"
 #include "oldCreature.h"
@@ -113,7 +114,8 @@ void c2Creature::processGenes() {
 	oldCreature::processGenes();
 
 	for (auto& organ : organs) {
-		organ->processGenes();
+		if (organ)
+			organ->processGenes();
 	}
 }
 
@@ -547,12 +549,15 @@ void c1Creature::addGene(gene* g) {
 void c2Creature::addGene(gene* g) {
 	oldCreature::addGene(g);
 
-	if (typeid(*g) == typeid(organGene)) {
+	if (auto* half_lives = dynamic_cast<bioHalfLivesGene*>(g)) {
+		std::copy_n(half_lives->halflives, chemical_decay.size(), chemical_decay.begin());
+	} else if (typeid(*g) == typeid(organGene)) {
 		// create organ
 		organGene* o = dynamic_cast<organGene*>(g);
 		assert(o);
 		if (!o->isBrain()) { // TODO: handle brain organ
 			organs.push_back(std::shared_ptr<c2Organ>(new c2Organ(this, o)));
+			stored_organ_count = numeric_cast<uint32_t>(organs.size());
 		}
 	} else if (typeid(*g) == typeid(bioReactionGene)) {
 		THROW_IFNOT(organs.size() > 0);
