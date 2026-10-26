@@ -299,8 +299,8 @@ c2Creature::c2Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned c
 	for (unsigned char& drive : drives)
 		drive = 0;
 
-	mutationchance = 0;
-	mutationdegree = 0;
+	mutationchance = 127;
+	mutationdegree = 127;
 
 	brain = new oldBrain(this);
 	finishInit();
@@ -411,6 +411,7 @@ void c2Creature::tick() {
 	// TODO: should we tick some things even if dead?
 	if (!alive)
 		return;
+	updateFertilitySignal();
 
 	senses[0] = 255; // always-on
 	senses[1] = (asleep ? 255 : 0); // asleep

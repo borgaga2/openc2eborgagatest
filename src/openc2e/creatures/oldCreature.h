@@ -31,6 +31,7 @@ namespace sfc {
 struct COrganV2;
 struct CBiochemistryV2;
 struct ReceptorV2;
+struct CreatureV2;
 }
 
 // Share this context across organs when restoring/capturing a complete graph.
@@ -256,16 +257,21 @@ class c2Creature : public oldCreature {
 	unsigned char gaitloci[16];
 	unsigned char drives[17];
 	unsigned char mutationchance, mutationdegree;
+	unsigned char fertility_output = 0, life_state_signal = 0;
+	unsigned char retained_asleep_state = 0;
 
 	void addGene(gene*);
 	void tickBiochemistry();
 	void processGenes();
+	void updateFertilitySignal();
 
   public:
 	c2Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a);
 	void restoreC2Biochemistry(const sfc::CBiochemistryV2&, uint32_t biotick);
 	void updateC2Biochemistry(sfc::CBiochemistryV2&) const;
 	uint32_t getBiochemistryTicks() const { return biochemticks; }
+	void restoreC2Physiology(const sfc::CreatureV2&);
+	void updateC2Physiology(sfc::CreatureV2&) const;
 
 	void tick();
 

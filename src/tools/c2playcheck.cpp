@@ -95,6 +95,11 @@ int main(int argc, char** argv) {
 			size_t checked = 0, neurons = 0, connections = 0, organs_checked = 0;
 			size_t receptors_checked = 0, emitters_checked = 0, reactions_checked = 0;
 			size_t biochemistries_checked = 0;
+			const auto same_physiology = [](const sfc::CreatureV2& a, const sfc::CreatureV2& b) {
+				return a.physiological_state == b.physiological_state && a.sex == b.sex &&
+					a.age == b.age && a.age_ticks == b.age_ticks && a.biotick == b.biotick &&
+					a.life_state == b.life_state && a.asleep == b.asleep;
+			};
 			const auto encode_biochemistry = [](const sfc::CBiochemistryV2& biology) {
 				VectorWriter output;
 				MFCWriter writer(output);
@@ -136,6 +141,11 @@ int main(int argc, char** argv) {
 				SavedC2CreatureCheck restored(saved_genome, saved->sex == 2, 0, &holder);
 				auto& brain = *restored.getBrain();
 				brain.restoreC2State(*saved->brain);
+				restored.restoreC2Physiology(*saved);
+				sfc::CreatureV2 captured_physiology;
+				restored.updateC2Physiology(captured_physiology);
+				if (!same_physiology(captured_physiology, *saved))
+					throw Exception("Restored C2 physiology did not preserve its saved signals and life state");
 				auto captured = *saved->brain;
 				brain.updateC2State(captured);
 				if (encode_brain(captured) != encode_brain(*saved->brain))
@@ -178,6 +188,7 @@ int main(int argc, char** argv) {
 						check_organ(*organ);
 				// The restored brain must be in place before binding the whole body.
 				brain.restoreC2State(*saved->brain);
+				restored.restoreC2Physiology(*saved);
 				restored.restoreC2Biochemistry(*saved->biochemistry, saved->biotick);
 				sfc::CBiochemistryV2 captured_biology;
 				restored.updateC2Biochemistry(captured_biology);
@@ -188,9 +199,14 @@ int main(int argc, char** argv) {
 					restored.sampleBiochemistry();
 				brain.updateC2State(captured);
 				restored.updateC2Biochemistry(captured_biology);
-				const auto resumed_biotick = restored.getBiochemistryTicks();
+				restored.updateC2Physiology(captured_physiology);
 				brain.restoreC2State(captured);
-				restored.restoreC2Biochemistry(captured_biology, resumed_biotick);
+				restored.restoreC2Physiology(captured_physiology);
+				restored.restoreC2Biochemistry(captured_biology, captured_physiology.biotick);
+				sfc::CreatureV2 resumed_physiology;
+				restored.updateC2Physiology(resumed_physiology);
+				if (!same_physiology(resumed_physiology, captured_physiology))
+					throw Exception("Resumed C2 physiology lost changes made by its restored biochemistry");
 				restored.sampleBiochemistry();
 				++biochemistries_checked;
 				++checked;
@@ -204,6 +220,7 @@ int main(int argc, char** argv) {
 			fmt::print("C2 saved organ state check passed: {} records, {} receptors, {} emitters, {} reactions\n",
 				organs_checked, receptors_checked, emitters_checked, reactions_checked);
 			fmt::print("C2 saved biochemistry graph check passed: {} creatures\n", biochemistries_checked);
+			fmt::print("C2 saved physiology check passed: {} creatures\n", checked);
 		}
 		const auto egg_directory = findMainDirectoryFile("Eggs");
 		size_t eggs_checked = 0;

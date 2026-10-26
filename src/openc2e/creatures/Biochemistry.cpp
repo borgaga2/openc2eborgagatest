@@ -343,37 +343,64 @@ unsigned char* c1Creature::getLocusPointer(bool receptor, unsigned char o, unsig
 }
 
 unsigned char* c2Creature::getLocusPointer(bool receptor, unsigned char o, unsigned char t, unsigned char l) {
-	unsigned char* oldlocus = oldCreature::getLocusPointer(receptor, o, t, l);
-	if (oldlocus)
-		return oldlocus;
-
-	switch (o) {
-		case 1: // creature
-			switch (t) {
-				case 4: // sensorimotor
-					if (receptor) {
-						if (l < 8)
-							return &involaction[l];
-						else if (l < 24)
-							return &gaitloci[l - 8];
-					} else {
-						if (l < 14)
-							return &senses[l];
-					}
-					break;
-
-				case 5: // drive levels
-					if (l < 17)
-						return &drives[l];
+	if (o != 1)
+		return oldCreature::getLocusPointer(receptor, o, t, l);
+	// C2's receptor inputs and emitter outputs occupy different native fields
+	// for reproduction and death. Do not route these through the C1 aliases.
+	switch (t) {
+		case 0:
+			if (receptor && l < 7)
+				return &lifestageloci[l];
+			if (!receptor && l == 0)
+				return &muscleenergy;
+			break;
+		case 1:
+			if (l < 8)
+				return &floatingloci[l];
+			break;
+		case 2:
+			if (receptor) {
+				if (l == 0)
+					return &fertile;
+				if (l == 1)
+					return &receptive;
+				if (l == 2)
+					return &mutationchance;
+				if (l == 3)
+					return &mutationdegree;
+			} else {
+				if (l == 0)
+					return &fertility_output;
+				if (l == 1)
+					return &pregnant;
 			}
 			break;
+		case 3:
+			if (l == 0) {
+				if (receptor)
+					return &dead;
+				life_state_signal = alive ? 0 : (life_state_signal ? life_state_signal : 255);
+				return &life_state_signal;
+			}
+			break;
+		case 4:
+			if (receptor) {
+				if (l < 8)
+					return &involaction[l];
+				if (l < 24)
+					return &gaitloci[l - 8];
+			} else if (l < 14) {
+				return &senses[l];
+			}
+			break;
+		case 5:
+			if (l < 17)
+				return &drives[l];
+			break;
 	}
-
-	fmt::print(
-		"c2Creature::getLocusPointer failed to interpret locus ({}, {}, {}) of {}\n",
+	fmt::print("c2Creature::getLocusPointer failed to interpret locus ({}, {}, {}) of {}\n",
 		(int)o, (int)t, (int)l, receptor ? "receptor" : "emitter");
-
-	return 0;
+	return nullptr;
 }
 
 float* c2eCreature::getLocusPointer(bool receptor, unsigned char o, unsigned char t, unsigned char l) {
