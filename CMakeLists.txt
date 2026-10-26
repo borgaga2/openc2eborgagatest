@@ -233,6 +233,7 @@ add_executable(test_fileformats
 	src/fileformats/tests/C2BrainDataTest.cpp
 	src/fileformats/tests/C2BodyDataTest.cpp
 	src/fileformats/tests/C2BiochemistryDataTest.cpp
+	src/fileformats/tests/C2CreatureDataTest.cpp
 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(test_fileformats BEFORE PRIVATE -Wconversion -Wsign-conversion -Wsign-compare)

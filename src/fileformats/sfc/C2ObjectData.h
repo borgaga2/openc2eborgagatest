@@ -230,6 +230,26 @@ struct CallButtonV2 : SimpleObjectV2 {
 	}
 };
 
+// C2 speech bubbles retain a 37-byte buffer, including bytes after its NUL.
+struct BubbleV2 : SimpleObjectV2 {
+	uint8_t life = 0;
+	uint32_t creator_id = 0;
+	std::array<uint8_t, 37> text{};
+	std::array<uint8_t, 2> flags{};
+	std::array<uint32_t, 2> position_state{};
+
+	template <typename Archive>
+	void serialize(Archive& ar) {
+		SimpleObjectV2::serialize(ar);
+		ar(life);
+		ar(creator_id);
+		ar(std::span<uint8_t>(text));
+		ar(std::span<uint8_t>(flags));
+		for (auto& value : position_state)
+			ar(value);
+	}
+};
+
 struct PointerToolV2 : SimpleObjectV2 {
 	std::array<uint8_t, 51> pointer_data{};
 
@@ -278,6 +298,7 @@ template <typename Archive>
 void register_c2_object_classes(Archive& ar) {
 	ar.template register_class<EntityV2>("Entity", 1);
 	ar.template register_class<SimpleObjectV2>("SimpleObject", 2);
+	ar.template register_class<BubbleV2>("Bubble", 2);
 	ar.template register_class<CompoundObjectV2>("CompoundObject", 2);
 	ar.template register_class<VehicleV2>("Vehicle", 2);
 	ar.template register_class<LiftV2>("Lift", 2);

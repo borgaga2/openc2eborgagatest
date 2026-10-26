@@ -40,6 +40,7 @@ TEST(SFCMacro, C2PreservesExecutionStateAndArchiveReferences) {
 	state.favorite_places[5] = {"caf\xc3\xa9", -10, 1000};
 	state.reserved_after_places = 2;
 	state.speech_history = {"hello", "caf\xc3\xa9"};
+	state.place_history = {"The Incubator", "Cave"};
 	state.macros = {macro, nullptr, macro};
 
 	VectorWriter out;
@@ -89,6 +90,7 @@ TEST(SFCMacro, C2PreservesExecutionStateAndArchiveReferences) {
 	EXPECT_EQ(restored.favorite_places[5].name, state.favorite_places[5].name);
 	EXPECT_EQ(restored.favorite_places[5].x, -10);
 	EXPECT_EQ(restored.speech_history, state.speech_history);
+	EXPECT_EQ(restored.place_history, state.place_history);
 	EXPECT_FALSE(in.has_data_left());
 
 	VectorWriter reencoded;
@@ -115,4 +117,27 @@ TEST(SFCMacro, C2RejectsTruncatedExecutionState) {
 	sfc::register_c2_macro_class(reader);
 	std::shared_ptr<sfc::MacroV2> restored;
 	EXPECT_ANY_THROW(reader(restored));
+}
+
+TEST(SFCMacro, C2ReadsIndependentHistoryBoundaryFixture) {
+	// Empty scroll/selection and six empty favorite places precede a WORD,
+	// then two separate MFC string arrays, then the DWORD macro count.
+	std::vector<uint8_t> bytes(40, 0);
+	const std::vector<uint8_t> tail = {
+		0x34, 0x12, 2, 0, 4, 'f', 'o', 'o', 'd', 0,
+		1, 0, 4, 'C', 'a', 'v', 'e', 0, 0, 0, 0};
+	bytes.insert(bytes.end(), tail.begin(), tail.end());
+	SpanReader input(bytes);
+	MFCReader reader(input);
+	sfc::ScriptStateV2 state;
+	state.serialize(reader);
+	EXPECT_EQ(state.reserved_after_places, 0x1234);
+	EXPECT_EQ(state.speech_history, (std::vector<std::string>{"food", ""}));
+	EXPECT_EQ(state.place_history, (std::vector<std::string>{"Cave"}));
+	EXPECT_TRUE(state.macros.empty());
+	EXPECT_FALSE(input.has_data_left());
+	VectorWriter output;
+	MFCWriter writer(output);
+	state.serialize(writer);
+	EXPECT_EQ(output.vector(), bytes);
 }

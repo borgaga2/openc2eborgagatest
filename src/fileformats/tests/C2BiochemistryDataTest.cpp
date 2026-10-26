@@ -23,7 +23,7 @@ TEST(C2BiochemistryData, PreservesChemistryOrganHolesAndSharedReceptors) {
 	biology->organs[127]->receptor_groups = {{receptor, receptor}};
 	biology->organs[127]->state[33] = 0xa5;
 	biology->stored_organ_count = 2;
-	biology->reserved_after_organs = 624;
+	biology->reserved_after_organs = 112;
 	VectorWriter encoded;
 	MFCWriter writer(encoded);
 	sfc::register_c2_object_classes(writer);
@@ -58,7 +58,7 @@ TEST(C2BiochemistryData, PreservesChemistryOrganHolesAndSharedReceptors) {
 	EXPECT_EQ(decoded->organs[127]->receptor_groups[0][1], decoded_brain->receptor_groups[0][0]);
 	EXPECT_EQ(decoded_brain->emitters[0][7], 6);
 	EXPECT_EQ(decoded_brain->reactions[0][8], 9);
-	EXPECT_EQ(decoded->reserved_after_organs, 624);
+	EXPECT_EQ(decoded->reserved_after_organs, 112);
 	EXPECT_EQ(input.tell(), encoded.vector().size());
 	VectorWriter output;
 	MFCWriter roundtrip(output);
@@ -89,4 +89,23 @@ TEST(C2OrganData, RejectsInconsistentReceptorCountsAndTruncatedChemistry) {
 	MFCReader truncated_reader(truncated_input);
 	sfc::register_c2_organ_classes(truncated_reader);
 	EXPECT_THROW(truncated_reader(decoded), std::exception);
+}
+
+TEST(C2BiochemistryData, DoesNotConsumeFollowingCreatureSexOrAge) {
+	// Owner pointer, 256 chemical pairs, 128 null organ pointers, count, BYTE.
+	std::vector<uint8_t> bytes(775, 0);
+	bytes[774] = 112;
+	bytes.push_back(2);
+	bytes.push_back(3);
+	SpanReader input(bytes);
+	MFCReader reader(input);
+	sfc::CBiochemistryV2 biology;
+	biology.serialize(reader);
+	EXPECT_EQ(input.tell(), 775u);
+	EXPECT_EQ(biology.reserved_after_organs, 112);
+	uint8_t sex = 0, age = 0;
+	reader(sex); reader(age);
+	EXPECT_EQ(sex, 2);
+	EXPECT_EQ(age, 3);
+	EXPECT_FALSE(input.has_data_left());
 }

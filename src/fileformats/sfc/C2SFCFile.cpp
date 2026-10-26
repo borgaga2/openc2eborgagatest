@@ -1,4 +1,5 @@
 #include "C2SFCFile.h"
+#include "C2CreatureData.h"
 
 #include "common/Exception.h"
 #include "common/io/FileReader.h"
@@ -18,12 +19,14 @@ void register_c2_classes(MFCReader& ar) {
 	register_c2_map_classes(ar);
 	register_c2_object_classes(ar);
 	register_c2_macro_class(ar);
+	register_c2_creature_classes(ar);
 }
 
 void register_c2_classes(MFCWriter& ar) {
 	register_c2_map_classes(ar);
 	register_c2_object_classes(ar);
 	register_c2_macro_class(ar);
+	register_c2_creature_classes(ar);
 }
 
 void serialize_sections(MFCReader& ar, SpanReader& stream, const std::vector<uint8_t>& bytes, C2SFCFile& file) {
@@ -109,4 +112,3 @@ void write_c2_sfc_file(Writer& out, C2SFCFile& file) {
 }
 
 } // namespace sfc
-

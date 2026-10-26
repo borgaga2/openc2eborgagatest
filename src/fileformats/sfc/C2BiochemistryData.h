@@ -13,8 +13,8 @@ struct CBiochemistryV2 : MFCObject {
 	std::array<Chemical, 256> chemicals{};
 	std::array<std::shared_ptr<COrganV2>, 128> organs{};
 	uint32_t stored_organ_count = 0;
-	// Retain the two state bytes preceding the Creature's sex/age fields.
-	uint16_t reserved_after_organs = 0;
+	// C2 stores one byte here. Reading a WORD consumes the owner's sex.
+	uint8_t reserved_after_organs = 0;
 
 	template <typename Archive>
 	void serialize(Archive& ar) {

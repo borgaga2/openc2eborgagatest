@@ -68,8 +68,9 @@ struct ScriptStateV2 {
 	int32_t scroll_x = 0, scroll_y = 0;
 	ObjectV2* selected_creature = nullptr;
 	std::array<FavoritePlaceV2, 6> favorite_places;
-	uint32_t reserved_after_places = 0;
+	uint16_t reserved_after_places = 0;
 	std::vector<std::string> speech_history;
+	std::vector<std::string> place_history;
 	std::vector<std::shared_ptr<MacroV2>> macros;
 
 	template <typename Archive>
@@ -83,6 +84,9 @@ struct ScriptStateV2 {
 		ar.size_u16(speech_history);
 		for (auto& speech : speech_history)
 			ar.win1252_mfcstring(speech);
+		ar.size_u16(place_history);
+		for (auto& place : place_history)
+			ar.win1252_mfcstring(place);
 		ar.size_u32(macros);
 		for (auto& macro : macros)
 			ar(macro);
