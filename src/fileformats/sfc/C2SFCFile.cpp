@@ -112,3 +112,4 @@ void write_c2_sfc_file(Writer& out, C2SFCFile& file) {
 }
 
 } // namespace sfc
+
