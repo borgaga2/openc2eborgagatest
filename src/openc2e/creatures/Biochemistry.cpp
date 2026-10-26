@@ -464,6 +464,7 @@ c2Organ::c2Organ(c2Creature* p, organGene* g) {
 	longtermlifeforce = shorttermlifeforce = lifeforce;
 
 	biochemticks = 0;
+	energycost = 2;
 
 	repairrate = 0;
 	clockrate = ourGene->clockrate;
@@ -474,7 +475,8 @@ c2Organ::c2Organ(c2Creature* p, organGene* g) {
 	atpdamagecoefficient = static_cast<unsigned int>(
 		(std::max<unsigned int>(1, ourGene->atpdamagecoefficient) * lifeforce) / 255.0);
 
-	clockratereceptors = repairratereceptors = injuryreceptors = 0;
+	cached_health = std::max<unsigned int>(1, ourGene->lifeforce);
+	energy_gate = 1;
 }
 
 c2eOrgan::c2eOrgan(c2eCreature* p, organGene* g) {
@@ -494,19 +496,27 @@ c2eOrgan::c2eOrgan(c2eCreature* p, organGene* g) {
 }
 
 void c2Organ::processGenes() {
-	// TODO: is genes.size() always the size we want?
-	energycost = 2 + (genes.size() / 10);
-
 	for (; processedGeneCount < genes.size(); processedGeneCount++) {
 		gene* g = genes[processedGeneCount];
 		if (typeid(*g) == typeid(bioReactionGene)) {
 			reactions.push_back(std::shared_ptr<c2Reaction>(new c2Reaction((bioReactionGene*)g)));
 		} else if (typeid(*g) == typeid(bioEmitterGene)) {
-			emitters.push_back(c2Emitter((bioEmitterGene*)g, this));
+			c2Emitter emitter((bioEmitterGene*)g, this);
+			auto previous = std::find_if(emitters.begin(), emitters.end(), [&](const auto& item) {
+				return item.organ == emitter.organ && item.tissue == emitter.tissue &&
+					item.locus_id == emitter.locus_id && item.chemical == emitter.chemical;
+			});
+			if (previous == emitters.end())
+				emitters.push_back(emitter);
+			else
+				*previous = emitter;
 		} else if (typeid(*g) == typeid(bioReceptorGene)) {
 			receptors.push_back(c2Receptor((bioReceptorGene*)g, this));
+			receptor_identities.push_back(receptor_identities.size());
 		}
 	}
+	groupReceptors();
+	energycost = 2 + (reactions.size() + emitters.size() + receptors.size()) / 10;
 }
 
 void c2eOrgan::processGenes() {
@@ -528,105 +538,57 @@ void c2eOrgan::processGenes() {
 
 void c2Organ::tick() {
 	if (longtermlifeforce <= 0.5f)
-		return; // We're dead!
-
-	biotick += clockrate;
-
-	bool ticked = false;
-
-	/*
-	 * the variable we call 'biotick' here is actually 'clock' in c2 - biochemticks is actual biotick
-	 * TODO: rename biotick to clock
-	 */
-	/*
-	 * This seems to be the correct 'algorithm' for working out when the organ should be
-	 * processed, despite the c2 Science Kit showing a different result. beware, the
-	 * Brain Organ is only processed when the brain is (ie: half the speed of biochem)
-	 */
-	if (biotick >= 255) {
-		biotick %= 255;
-		biochemticks++;
-
-		ticked = true;
-
-		// chem 99 = ATP, chem 100 = ADP (hardcoded)
-		unsigned char atplevel = parent->getChemical(99);
-		if (atplevel >= energycost) {
-			// energy consumption
-			parent->subChemical(99, energycost);
-			parent->addChemical(100, energycost);
-
-			// *** tick emitters
-			for (auto& emitter : emitters)
-				processEmitter(emitter);
-
-			// *** tick reactions
-			for (auto& reaction : reactions)
-				processReaction(*reaction);
-		} else {
-			// not enough energy!
-			applyInjury(atpdamagecoefficient);
-		}
-
-
-		// *** long-term damage
-		float diff = longtermlifeforce - shorttermlifeforce;
-		longtermlifeforce = longtermlifeforce - (diff * (damagerate / 255.0)); // TODO: correct?
-
-		// *** repair injuries
-		// TODO: doesn't this mean STLF could go above LTLF?
-		float repair = diff * (repairrate / 255.0); // TODO: correct?
-		shorttermlifeforce += repair;
-
-		if (repair > 0.0f && lifeforce > 0.0f) {
-			const int healedInjury = static_cast<int>(repair * (255.0f / lifeforce));
-			if (healedInjury > 0)
-				parent->subChemical(14, static_cast<unsigned char>(healedInjury));
-		}
-
-		// Injury receptors store a byte-sized amount for this organ's next
-		// activation. Convert it to the organ's life-force scale before applying.
-		if (injurytoapply != 0) {
-			const float scaled_injury = static_cast<float>(injurytoapply * lifeforce / 255.0);
-			applyInjury(static_cast<unsigned int>(scaled_injury / 10.0f));
-			injurytoapply = 0;
-		}
-	}
-
-	if (biochemticks == 0)
+		return;
+	const unsigned int phase = biotick + clockrate;
+	biotick = phase % 255;
+	if (phase < 255)
 		return;
 
-	// *** tick receptors
-	if (clockratereceptors != 0)
-		clockrate = 0;
-	if (repairratereceptors != 0)
-		repairrate = 0;
-	if (injuryreceptors != 0)
-		injurytoapply = 0;
-
-	for (auto& receptor : receptors)
-		processReceptor(receptor, ticked);
-
-	// *** decay life force
-	if (ticked) {
-		shorttermlifeforce -= shorttermlifeforce * (1.0f / 100000.0f);
-		longtermlifeforce -= longtermlifeforce * (1.0f / 100000.0f);
+	// C2 samples networks using the low byte of the activation count, then
+	// advances the count. Receptors run between emitters and reactions.
+	energy_gate = parent->getChemical(99) >= energycost;
+	if (energy_gate) {
+		parent->subChemical(99, energycost);
+		parent->addChemical(100, energycost);
+		for (auto& emitter : emitters)
+			processEmitter(emitter);
+		processReceptors();
+		for (auto& reaction : reactions)
+			processReaction(*reaction);
+	} else {
+		applyInjury(atpdamagecoefficient);
 	}
+
+	const float difference = longtermlifeforce - shorttermlifeforce;
+	longtermlifeforce -= (damagerate * difference) / 255.0f;
+	if (energy_gate) {
+		const float repair = static_cast<float>((repairrate * difference) / 255.0);
+		shorttermlifeforce += repair;
+		const int repaired = static_cast<int>((repair * 255.0) / lifeforce);
+		parent->addChemical(48, static_cast<uint8_t>(repaired));
+	}
+	if (injurytoapply != 0) {
+		const float scaled_injury = static_cast<float>(injurytoapply * lifeforce / 255.0);
+		applyInjury(static_cast<unsigned int>(scaled_injury / 10.0f));
+		injurytoapply = 0;
+	}
+	++biochemticks;
+	if (energy_gate) {
+		shorttermlifeforce -= shorttermlifeforce * 0.00001f;
+		longtermlifeforce -= longtermlifeforce * 0.00001f;
+	}
+	cached_health = static_cast<uint8_t>(static_cast<int>((shorttermlifeforce * 255.0f) / lifeforce));
 }
 
 void c2Organ::applyInjury(float value) {
 	if (value <= 0.0f || lifeforce <= 0.0f)
 		return;
-
-	const float previousLifeForce = shorttermlifeforce;
-	shorttermlifeforce -= value;
-	if (shorttermlifeforce < 0.0f)
-		shorttermlifeforce = 0.0f;
-
-	// The C2 injury chemical is byte-scaled, unlike the normalized C3 value.
-	const int injuryChemical = static_cast<int>((previousLifeForce - shorttermlifeforce) * (255.0f / lifeforce));
-	if (injuryChemical > 0)
-		parent->addChemical(14, static_cast<unsigned char>(injuryChemical));
+	shorttermlifeforce = std::max(0.0f, shorttermlifeforce - value);
+	cached_health = static_cast<uint8_t>(static_cast<int>((shorttermlifeforce * 255.0f) / lifeforce));
+	// C2 emits injury (31) for the requested amount and repair (48) when
+	// repairing. Neither signal uses C3's normalized injury chemical.
+	const int injury = static_cast<int>((value * 255.0) / lifeforce);
+	parent->addChemical(31, static_cast<uint8_t>(injury));
 }
 
 void c2eOrgan::tick() {
@@ -755,17 +717,14 @@ void c1Creature::processReaction(c1Reaction& d) {
 }
 
 void c2Organ::processReaction(c2Reaction& d) {
-	// TODO: untested
-
-	bioReactionGene& g = *d.data;
-
-	// TODO: this might not all be correct
+	const c2Reaction& g = d;
 
 	// work out which rate we're dealing with
 	unsigned char rate = g.rate / 8;
 
 	// if the tickmask doesn't want us to change things this tick, don't!
-	if ((biochemticks & parent->calculateTickMask(rate)) != 0)
+	const unsigned int mask = parent->calculateTickMask(rate);
+	if ((static_cast<uint8_t>(biochemticks) & mask) != mask)
 		return;
 
 	unsigned char ratio = 255, ratio2 = 255;
@@ -860,38 +819,21 @@ void c1Creature::processEmitter(c1Emitter& d) {
 	}
 }
 
-void c2Organ::processEmitter(c2Emitter& d) {
-	// TODO: untested
-
-	bioEmitterGene& g = *d.data;
-
-	if ((biochemticks % g.rate) != 0)
+void c2Organ::processEmitter(c2Emitter& emitter) {
+	if (!emitter.locus || emitter.rate == 0)
 		return;
-
-	if (!d.locus)
+	int value = *emitter.locus;
+	if (emitter.flags & 4)
+		value = 255 - value;
+	if ((static_cast<uint8_t>(biochemticks) % emitter.rate) != 0 || value <= emitter.threshold)
 		return;
-	unsigned char f = *d.locus;
-	if (g.clear)
-		*d.locus = 0;
-	if (g.invert)
-		f = 255 - f;
-
-	if (g.digital) {
-		if (f < g.threshold)
-			return;
-		parent->addChemical(g.chemical, g.gain);
-	} else {
-		int r = (((int)f - g.threshold) * g.gain) / 255;
-
-		// clip the result of the calculation to unsigned char, and reassign it
-		if (r < 0)
-			r = 0;
-		else if (r > 255)
-			r = 255;
-		f = r;
-
-		parent->addChemical(g.chemical, f);
-	}
+	value -= emitter.threshold;
+	const unsigned char amount = (emitter.flags & 2) ? emitter.gain : (value * emitter.gain) >> 8;
+	parent->addChemical(emitter.chemical, amount);
+	// A clear emitter consumes the source only after its sampling and
+	// threshold checks succeed; other emitters can share that source.
+	if (emitter.flags & 1)
+		*emitter.locus = 0;
 }
 
 void c2eOrgan::processEmitter(c2eEmitter& d) {
@@ -960,51 +902,50 @@ void c1Creature::processReceptor(c1Receptor& d) {
 		*d.locus = f;
 }
 
-void c2Organ::processReceptor(c2Receptor& d, bool checkchem) {
-	// TODO: untested
-
-	bioReceptorGene& g = *d.data;
-
-	// TODO: same issues as c2eOrgan::processReceptor below, probably
-
-	if (checkchem) {
-		d.processed = true;
-		d.lastvalue = parent->getChemical(g.chemical);
+void c2Organ::groupReceptors() {
+	receptor_groups.clear();
+	for (size_t i = 0; i < receptors.size(); ++i) {
+		auto group = std::find_if(receptor_groups.begin(), receptor_groups.end(), [&](const auto& indices) {
+			const auto& first = receptors[indices.front()];
+			return first.organ == receptors[i].organ && first.tissue == receptors[i].tissue && first.locus_id == receptors[i].locus_id;
+		});
+		if (group == receptor_groups.end())
+			receptor_groups.push_back({i});
+		else
+			group->push_back(i);
 	}
-
-	if (!d.processed)
-		return;
-	if (!d.locus)
-		return;
-
-	unsigned char f = d.lastvalue;
-	int r;
-	if (g.digital)
-		r = f > g.threshold ? g.gain : 0;
-	else
-		// TODO: int promotion correct to makke this work out?
-		r = (((int)f - g.threshold) * g.gain) / 255;
-
-	if (g.inverted)
-		r = g.nominal - r;
-	else
-		r += g.nominal;
-
-	// clip the result of the calculation to unsigned char, and reassign it
-	if (r < 0)
-		r = 0;
-	else if (r > 255)
-		r = 255;
-	f = r;
-
-	if (f == 0 && g.organ == 1 && g.tissue == 3 && g.locus == 0) // evil check for "Die if non-zero!" locus
-		return;
-	else if (d.receptors)
-		*d.locus += (f / *d.receptors);
-	else
-		*d.locus = f;
 }
 
+void c2Organ::processReceptors() {
+	// C2 averages the nominal values together, and averages excitation and
+	// inhibition separately. Clamping individual receptors changes the result.
+	for (const auto& group : receptor_groups) {
+		if (group.empty() || !receptors[group.front()].locus)
+			continue;
+		unsigned int nominal = 0, excitation = 0, inhibition = 0, excitatory = 0, inhibitory = 0;
+		for (size_t index : group) {
+			const auto& receptor = receptors[index];
+			if (!receptor.chemical)
+				continue;
+			const int excess = std::max(0, static_cast<int>(parent->getChemical(receptor.chemical)) - receptor.threshold);
+			const unsigned int value = excess == 0 ? 0 : ((receptor.flags & 2) ? receptor.gain : (excess * receptor.gain) >> 8);
+			nominal += receptor.nominal;
+			if (receptor.flags & 1) {
+				inhibition += value;
+				++inhibitory;
+			} else {
+				excitation += value;
+				++excitatory;
+			}
+		}
+		unsigned int value = excitatory + inhibitory ? nominal / (excitatory + inhibitory) : 0;
+		if (excitatory)
+			value = std::min(255u, value + excitation / excitatory);
+		if (inhibitory)
+			value -= std::min(value, inhibition / inhibitory);
+		*receptors[group.front()].locus = static_cast<unsigned char>(value);
+	}
+}
 
 void c2eOrgan::processReceptor(c2eReceptor& d, bool checkchem) {
 	bioReceptorGene& g = *d.data;
@@ -1053,36 +994,15 @@ void c2eOrgan::processReceptor(c2eReceptor& d, bool checkchem) {
 		*d.locus = f;
 }
 
-unsigned char* c2Organ::getLocusPointer(bool receptor, unsigned char o, unsigned char t, unsigned char l, unsigned int** receptors) {
-	if (receptors)
-		*receptors = 0;
-
-	switch (o) {
-		case 2: // organ
-			if (t == 0)
-				switch (l) {
-					case 0: // clock rate
-						if (receptors) {
-							*receptors = &clockratereceptors;
-							clockratereceptors++;
-						}
-						return &clockrate;
-					case 1: // repair rate
-						if (receptors) {
-							*receptors = &repairratereceptors;
-							repairratereceptors++;
-						}
-						return &repairrate;
-					case 2: // injury to apply
-						if (receptors) {
-							*receptors = &injuryreceptors;
-							injuryreceptors++;
-						}
-						return &injurytoapply;
-				}
-			break;
+unsigned char* c2Organ::getLocusPointer(bool receptor, unsigned char o, unsigned char t, unsigned char l) {
+	if (o == 2 && t == 0) {
+		if (l == 0)
+			return &clockrate;
+		if (l == 1)
+			return &repairrate;
+		if (l == 2)
+			return receptor ? &injurytoapply : &cached_health;
 	}
-
 	return parent->getLocusPointer(receptor, o, t, l);
 }
 
@@ -1129,8 +1049,28 @@ c1Reaction::c1Reaction(bioReactionGene* g) {
 	data = g;
 }
 
-c2Reaction::c2Reaction(bioReactionGene* g) {
-	data = g;
+c2Reaction::c2Reaction(bioReactionGene* gene)
+	: c2Reaction({gene->quantity[0], gene->reactant[0], gene->quantity[1], gene->reactant[1],
+		gene->rate, gene->quantity[2], gene->reactant[2], gene->quantity[3], gene->reactant[3]}) {
+	// C2 folds out-of-range genetic quantities into the supported 1..16 range.
+	for (auto& amount : quantity)
+		if (amount < 1 || amount > 16)
+			amount = (amount & 15) + 1;
+}
+
+c2Reaction::c2Reaction(const std::array<uint8_t, 9>& state) {
+	// C2 archives store the rate between the two inputs and two outputs.
+	for (unsigned int i = 0; i < 4; ++i) {
+		const unsigned int offset = i * 2 + (i >= 2);
+		quantity[i] = state[offset];
+		reactant[i] = state[offset + 1];
+	}
+	rate = state[4];
+}
+
+std::array<uint8_t, 9> c2Reaction::parameters() const {
+	return {quantity[0], reactant[0], quantity[1], reactant[1], rate,
+		quantity[2], reactant[2], quantity[3], reactant[3]};
 }
 
 c2eReaction::c2eReaction(bioReactionGene* g) {
@@ -1146,10 +1086,18 @@ c1Receptor::c1Receptor(bioReceptorGene* g, c1Creature* parent) {
 	locus = parent->getLocusPointer(true, g->organ, g->tissue, g->locus);
 }
 
-c2Receptor::c2Receptor(bioReceptorGene* g, c2Organ* parent) {
-	data = g;
-	processed = false;
-	locus = parent->getLocusPointer(true, g->organ, g->tissue, g->locus, &receptors);
+c2Receptor::c2Receptor(bioReceptorGene* gene, c2Organ* parent)
+	: c2Receptor({static_cast<uint8_t>(gene->organ % 3), gene->tissue, gene->locus, gene->chemical, gene->threshold,
+		gene->nominal, gene->gain, static_cast<uint8_t>(gene->inverted | (gene->digital << 1))}, parent) {}
+
+c2Receptor::c2Receptor(const std::array<uint8_t, 8>& state, c2Organ* parent)
+	: organ(state[0]), tissue(state[1]), locus_id(state[2]), chemical(state[3]), threshold(state[4]),
+	  nominal(state[5]), gain(state[6]), flags(state[7]) {
+	locus = parent->getLocusPointer(true, organ, tissue, locus_id);
+}
+
+std::array<uint8_t, 8> c2Receptor::parameters() const {
+	return {organ, tissue, locus_id, chemical, threshold, nominal, gain, flags};
 }
 
 c2eReceptor::c2eReceptor(bioReceptorGene* g, c2eOrgan* parent) {
@@ -1166,9 +1114,18 @@ c1Emitter::c1Emitter(bioEmitterGene* g, c1Creature* parent) {
 	locus = parent->getLocusPointer(false, g->organ, g->tissue, g->locus);
 }
 
-c2Emitter::c2Emitter(bioEmitterGene* g, c2Organ* parent) {
-	data = g;
-	locus = parent->getLocusPointer(false, g->organ, g->tissue, g->locus, 0);
+c2Emitter::c2Emitter(bioEmitterGene* gene, c2Organ* parent)
+	: c2Emitter({static_cast<uint8_t>(gene->organ % 3), gene->tissue, gene->locus, gene->chemical, gene->threshold,
+		std::max<uint8_t>(1, gene->rate), gene->gain, static_cast<uint8_t>(gene->clear | (gene->digital << 1) | (gene->invert << 2))}, parent) {}
+
+c2Emitter::c2Emitter(const std::array<uint8_t, 8>& state, c2Organ* parent)
+	: organ(state[0]), tissue(state[1]), locus_id(state[2]), chemical(state[3]), threshold(state[4]),
+	  rate(state[5]), gain(state[6]), flags(state[7]) {
+	locus = parent->getLocusPointer(false, organ, tissue, locus_id);
+}
+
+std::array<uint8_t, 8> c2Emitter::parameters() const {
+	return {organ, tissue, locus_id, chemical, threshold, rate, gain, flags};
 }
 
 c2eEmitter::c2eEmitter(bioEmitterGene* g, c2eOrgan* parent) {

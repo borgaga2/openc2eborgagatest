@@ -22,6 +22,7 @@
 
 #include "Creature.h"
 
+#include <array>
 #include <cassert>
 #include <memory>
 
@@ -148,21 +149,24 @@ class c1Creature : public oldCreature {
 
 struct c2Reaction {
 	explicit c2Reaction(bioReactionGene*);
-	bioReactionGene* data;
+	explicit c2Reaction(const std::array<uint8_t, 9>&);
+	std::array<uint8_t, 9> parameters() const;
+	uint8_t reactant[4], quantity[4], rate;
 };
 
 struct c2Receptor {
 	c2Receptor(bioReceptorGene*, class c2Organ*);
-	bioReceptorGene* data;
-	bool processed;
-	unsigned char lastvalue;
+	c2Receptor(const std::array<uint8_t, 8>&, class c2Organ*);
+	std::array<uint8_t, 8> parameters() const;
+	uint8_t organ, tissue, locus_id, chemical, threshold, nominal, gain, flags;
 	unsigned char* locus;
-	unsigned int* receptors;
 };
 
 struct c2Emitter {
 	c2Emitter(bioEmitterGene*, class c2Organ*);
-	bioEmitterGene* data;
+	c2Emitter(const std::array<uint8_t, 8>&, class c2Organ*);
+	std::array<uint8_t, 8> parameters() const;
+	uint8_t organ, tissue, locus_id, chemical, threshold, rate, gain, flags;
 	unsigned char* locus;
 };
 
@@ -177,6 +181,8 @@ class c2Organ {
 	std::vector<std::shared_ptr<c2Reaction> > reactions;
 	std::vector<c2Receptor> receptors;
 	std::vector<c2Emitter> emitters;
+	std::vector<std::vector<size_t>> receptor_groups;
+	std::vector<size_t> receptor_identities;
 	size_t processedGeneCount = 0;
 
 	// data
@@ -187,15 +193,17 @@ class c2Organ {
 
 	// locuses
 	unsigned char damagerate, repairrate, clockrate, injurytoapply;
-	unsigned int clockratereceptors, repairratereceptors, injuryreceptors;
+	unsigned char cached_health;
+	uint32_t energy_gate;
 
 	unsigned int biotick, biochemticks;
 
 	void processReaction(c2Reaction&);
 	void processEmitter(c2Emitter&);
-	void processReceptor(c2Receptor&, bool checkchem);
+	void processReceptors();
+	void groupReceptors();
 
-	unsigned char* getLocusPointer(bool receptor, unsigned char o, unsigned char t, unsigned char l, unsigned int** receptors);
+	unsigned char* getLocusPointer(bool receptor, unsigned char o, unsigned char t, unsigned char l);
 
   public:
 	c2Organ(c2Creature* p, organGene* g);

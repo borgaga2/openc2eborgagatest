@@ -87,6 +87,15 @@ int main(int argc, char** argv) {
 		if (argc == 4) {
 			auto saved_world = sfc::read_c2_sfc_file(std::filesystem::path(argv[2]));
 			size_t checked = 0, neurons = 0, connections = 0, organs_checked = 0;
+			size_t receptors_checked = 0, emitters_checked = 0, reactions_checked = 0;
+			const auto encode_organ = [](const sfc::COrganV2& organ) {
+				VectorWriter output;
+				MFCWriter writer(output);
+				sfc::register_c2_organ_classes(writer);
+				auto organ_record = organ; // include only the organ base of a saved brain
+				writer(&organ_record);
+				return output.vector();
+			};
 			const auto encode_brain = [](const sfc::CBrainV2& brain) {
 				VectorWriter output;
 				MFCWriter writer(output);
@@ -127,16 +136,31 @@ int main(int argc, char** argv) {
 					}
 				if (!organ_prototype || !saved->biochemistry)
 					throw Exception("Saved creature has no C2 organ prototype or chemistry");
-				// Check the mapped organ header values only; this does not restore
-				// the saved receptor, emitter or reaction networks.
+				// Restore each saved network independently, then exercise it against
+				// the saved chemical concentrations. Full world loading is separate.
 				const auto check_organ = [&](const sfc::COrganV2& record) {
 					c2Organ organ(&restored, organ_prototype);
 					organ.processGenes();
 					organ.restoreC2State(record);
 					auto captured_organ = record;
+					captured_organ.receptor_groups.clear();
+					captured_organ.emitters.clear();
+					captured_organ.reactions.clear();
 					organ.updateC2State(captured_organ);
-					if (captured_organ.state != record.state)
-						throw Exception("Restored C2 organ did not preserve its saved mutable values");
+					if (encode_organ(captured_organ) != encode_organ(record))
+						throw Exception("Restored C2 organ did not preserve its saved state and network");
+					for (unsigned int i = 1; i < 256; ++i) {
+						restored.subChemical(i, 255);
+						restored.addChemical(i, saved->biochemistry->chemicals[i].concentration);
+					}
+					for (unsigned int i = 0; i < 8; ++i)
+						organ.tick();
+					organ.updateC2State(captured_organ);
+					organ.restoreC2State(captured_organ);
+					organ.tick();
+					receptors_checked += organ.getReceptorCount();
+					emitters_checked += organ.getEmitterCount();
+					reactions_checked += organ.getReactionCount();
 					++organs_checked;
 				};
 				check_organ(*saved->brain);
@@ -151,7 +175,8 @@ int main(int argc, char** argv) {
 			if (!checked)
 				throw Exception("The optional saved C2 world contained no creatures");
 			fmt::print("C2 saved brain check passed: {} creatures, {} neurons, {} learned connections\n", checked, neurons, connections);
-			fmt::print("C2 saved organ state check passed: {} records\n", organs_checked);
+			fmt::print("C2 saved organ state check passed: {} records, {} receptors, {} emitters, {} reactions\n",
+				organs_checked, receptors_checked, emitters_checked, reactions_checked);
 		}
 		const auto egg_directory = findMainDirectoryFile("Eggs");
 		size_t eggs_checked = 0;
