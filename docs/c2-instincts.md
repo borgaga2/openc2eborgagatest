@@ -43,3 +43,21 @@ uses openc2e's random generator; it does not reproduce the original global
 random sequence. C1's initialization is unchanged. `c2playcheck` also
 exercises the newborn queue using installed C2 assets. This does not implement
 complete saved-world creature loading or prove all brain/lifecycle behavior.
+
+Saved queues use CInstinct's DWORD fields directly. The original serializer at
+`41a5a0` stores the already-expressed inputs and phase; loading them must not
+repeat the gene-expression masks or modulo operations from `41a4f0`.
+`restoreC2Instincts` replaces the constructor's pending genes with owned saved
+records, retaining queue order, shared record identity, phase and the remaining
+dreaming count. Sleep is restored separately by `restoreC2Physiology`.
+Direct wiring consumes these records without advancing the unused phased
+training routine. New instincts expressed at later life stages follow the
+restored queue. The installed-save check verifies exact queue serialization;
+unit tests also cover retry, resumed adult limits and snapshot ownership.
+
+The game still enters the legacy SFC loader. Its room reader now retains the
+opaque DWORD after floor points: original saved worlds contain 1 there even
+though Eden contains 0. Loading the tested populated save then reaches the
+unsupported Creature class. The component restore APIs must still be connected
+to world loading, including creature bodies, references and running scripts;
+component checks do not establish playable saved-world loading.

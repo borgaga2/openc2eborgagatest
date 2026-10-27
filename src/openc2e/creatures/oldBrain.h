@@ -29,6 +29,7 @@
 
 namespace sfc {
 struct CBrainV2;
+struct CInstinctV1;
 }
 
 struct oldSVRule {
@@ -128,6 +129,7 @@ class oldLobe {
 
 class oldBrain {
   protected:
+	bool wireInstinct(const sfc::CInstinctV1&);
 	class oldCreature* parent;
 	unsigned int ticks;
 	std::vector<unsigned int> lobe_process_order;
@@ -148,6 +150,8 @@ class oldBrain {
 
 	// False means C2 must keep the instinct queued and retry it later.
 	bool processInstinct(const creatureInstinctGene& instinct);
+	sfc::CInstinctV1 expressInstinct(const creatureInstinctGene&) const;
+	bool processC2Instinct(const sfc::CInstinctV1&);
 
 	oldLobe* getLobeByTissue(unsigned int id);
 	oldCreature* getParent() { return parent; }

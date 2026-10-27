@@ -31,6 +31,7 @@
 #include "historyManager.h"
 #include "oldBrain.h"
 #include "oldCreature.h"
+#include "fileformats/sfc/C2CreatureData.h"
 
 #include <algorithm>
 #include <cassert>
@@ -271,6 +272,50 @@ void oldCreature::startDreaming(unsigned int maxInstincts) {
 	dreamInstinctsRemaining = maxInstincts;
 	dreamTicksRemaining = 0;
 	setDreaming(maxInstincts > 0 && getNoUnprocessedInstincts() > 0);
+}
+
+void c2Creature::restoreC2Instincts(const sfc::CreatureV2& saved) {
+	std::deque<std::shared_ptr<sfc::CInstinctV1>> restored;
+	std::unordered_map<const sfc::CInstinctV1*, std::shared_ptr<sfc::CInstinctV1>> copies;
+	for (const auto& record : saved.instincts) {
+		if (!record)
+			throw Exception("Saved C2 instinct queue contains a null entry");
+		auto& copy = copies[record.get()];
+		if (!copy)
+			copy = std::make_shared<sfc::CInstinctV1>(*record);
+		restored.push_back(copy);
+	}
+	unprocessedinstincts.clear();
+	restored_instincts.swap(restored);
+	dreamInstinctsRemaining = saved.dreaming;
+	dreamTicksRemaining = 0;
+	// Sleep is restored separately; avoid callbacks or rewriting that state.
+	dreaming = saved.dreaming != 0;
+}
+
+void c2Creature::updateC2Instincts(sfc::CreatureV2& saved) const {
+	saved.instincts.clear();
+	std::unordered_map<const sfc::CInstinctV1*, std::shared_ptr<sfc::CInstinctV1>> copies;
+	for (const auto& record : restored_instincts) {
+		auto& copy = copies[record.get()];
+		if (!copy)
+			copy = std::make_shared<sfc::CInstinctV1>(*record);
+		saved.instincts.push_back(copy);
+	}
+	for (const auto* gene : unprocessedinstincts)
+		saved.instincts.push_back(std::make_shared<sfc::CInstinctV1>(brain->expressInstinct(*gene)));
+	saved.dreaming = dreaming ? dreamInstinctsRemaining : 0;
+}
+
+unsigned int c2Creature::processInstincts(unsigned int count) {
+	unsigned int processed = 0;
+	while (processed < count && !restored_instincts.empty()) {
+		if (!brain->processC2Instinct(*restored_instincts.front()))
+			return processed;
+		restored_instincts.pop_front();
+		++processed;
+	}
+	return processed + oldCreature::processInstincts(count - processed);
 }
 
 c1Creature::c1Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a)

@@ -32,6 +32,7 @@ struct COrganV2;
 struct CBiochemistryV2;
 struct ReceptorV2;
 struct CreatureV2;
+struct CInstinctV1;
 }
 
 // Share this context across organs when restoring/capturing a complete graph.
@@ -93,7 +94,7 @@ class oldCreature : public Creature {
 	void finishDecisionAction() override;
 
 	oldBrain* getBrain() { return brain; }
-	unsigned int processInstincts(unsigned int count);
+	virtual unsigned int processInstincts(unsigned int count);
 	void startDreaming(unsigned int maxInstincts);
 
 	unsigned char* getLocusPointer(bool receptor, unsigned char o, unsigned char t, unsigned char l);
@@ -259,6 +260,7 @@ class c2Creature : public oldCreature {
 	unsigned char mutationchance, mutationdegree;
 	unsigned char fertility_output = 0, life_state_signal = 0;
 	unsigned char retained_asleep_state = 0;
+	std::deque<std::shared_ptr<sfc::CInstinctV1>> restored_instincts;
 
 	void addGene(gene*);
 	void tickBiochemistry();
@@ -272,6 +274,10 @@ class c2Creature : public oldCreature {
 	uint32_t getBiochemistryTicks() const { return biochemticks; }
 	void restoreC2Physiology(const sfc::CreatureV2&);
 	void updateC2Physiology(sfc::CreatureV2&) const;
+	void restoreC2Instincts(const sfc::CreatureV2&);
+	void updateC2Instincts(sfc::CreatureV2&) const;
+	size_t getNoUnprocessedInstincts() override { return restored_instincts.size() + unprocessedinstincts.size(); }
+	unsigned int processInstincts(unsigned int count) override;
 
 	void tick();
 

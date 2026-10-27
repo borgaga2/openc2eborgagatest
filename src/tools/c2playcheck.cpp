@@ -95,6 +95,15 @@ int main(int argc, char** argv) {
 			size_t checked = 0, neurons = 0, connections = 0, organs_checked = 0;
 			size_t receptors_checked = 0, emitters_checked = 0, reactions_checked = 0;
 			size_t biochemistries_checked = 0;
+			size_t instincts_checked = 0;
+			const auto encode_instincts = [](const sfc::CreatureV2& creature) {
+				VectorWriter output;
+				MFCWriter writer(output);
+				writer.register_class<sfc::CInstinctV1>("CInstinct", 1);
+				for (const auto& instinct : creature.instincts)
+					writer(instinct);
+				return output.vector();
+			};
 			const auto same_physiology = [](const sfc::CreatureV2& a, const sfc::CreatureV2& b) {
 				return a.physiological_state == b.physiological_state && a.sex == b.sex &&
 					a.age == b.age && a.age_ticks == b.age_ticks && a.biotick == b.biotick &&
@@ -209,6 +218,14 @@ int main(int argc, char** argv) {
 					throw Exception("Resumed C2 physiology lost changes made by its restored biochemistry");
 				restored.sampleBiochemistry();
 				++biochemistries_checked;
+				restored.restoreC2Instincts(*saved);
+				sfc::CreatureV2 captured_instincts;
+				restored.updateC2Instincts(captured_instincts);
+				if (encode_instincts(captured_instincts) != encode_instincts(*saved) ||
+					captured_instincts.dreaming != saved->dreaming ||
+					restored.getNoUnprocessedInstincts() != saved->instincts.size())
+					throw Exception("Restored C2 instincts lost their queue, aliases, phase or dreaming limit");
+				instincts_checked += saved->instincts.size();
 				++checked;
 				neurons += saved->brain->neurons.size();
 				for (const auto& neuron : saved->brain->neurons)
@@ -221,6 +238,7 @@ int main(int argc, char** argv) {
 				organs_checked, receptors_checked, emitters_checked, reactions_checked);
 			fmt::print("C2 saved biochemistry graph check passed: {} creatures\n", biochemistries_checked);
 			fmt::print("C2 saved physiology check passed: {} creatures\n", checked);
+			fmt::print("C2 saved instinct queue check passed: {} instincts across {} creatures\n", instincts_checked, checked);
 		}
 		const auto egg_directory = findMainDirectoryFile("Eggs");
 		size_t eggs_checked = 0;

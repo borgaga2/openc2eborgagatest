@@ -99,7 +99,7 @@ class Creature {
 	unsigned int getVariant() { return variant; }
 	unsigned short getTint(unsigned int id) { return tintinfo[id]; }
 
-	size_t getNoUnprocessedInstincts() { return unprocessedinstincts.size(); }
+	virtual size_t getNoUnprocessedInstincts() { return unprocessedinstincts.size(); }
 
 	size_t getNoCategories() { return chosenagents.size(); }
 	AgentRef getChosenAgentForCategory(unsigned int cat) {

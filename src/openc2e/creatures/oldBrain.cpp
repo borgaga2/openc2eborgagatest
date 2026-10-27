@@ -19,6 +19,7 @@
 
 #include "oldBrain.h"
 #include "C2DendriteCount.h"
+#include "fileformats/sfc/CInstinct.h"
 
 #include "common/Random.h"
 #include "common/Exception.h"
@@ -1078,7 +1079,7 @@ oldLobe* oldBrain::getLobeByTissue(unsigned int id) {
 	return lobes[id];
 }
 
-bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
+sfc::CInstinctV1 oldBrain::expressInstinct(const creatureInstinctGene& gene) const {
 	const bool c2 = parent->getGenome()->getVersion() == 2;
 	// C2 folds expressed lobe/action/cell values to their native ranges.
 	// Work on a copy: expression must never rewrite inherited DNA.
@@ -1092,20 +1093,41 @@ bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
 				instinct.neurons[i] %= lobes[lobe]->getNoNeurons();
 		}
 	}
+	sfc::CInstinctV1 result{};
+	for (unsigned int i = 0; i < 3; ++i)
+		result.dendrites[i] = {instinct.lobes[i], instinct.neurons[i]};
+	result.motor_decision = instinct.action;
+	result.reinforcement_chemical = instinct.drive;
+	result.reinforcement_amount = instinct.level;
+	return result;
+}
+
+bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
+	return wireInstinct(expressInstinct(gene));
+}
+
+bool oldBrain::processC2Instinct(const sfc::CInstinctV1& instinct) {
+	assert(parent->getGenome()->getVersion() == 2);
+	// Archive records have already been expressed. Do not fold them again.
+	return wireInstinct(instinct);
+}
+
+bool oldBrain::wireInstinct(const sfc::CInstinctV1& instinct) {
+	const bool c2 = parent->getGenome()->getVersion() == 2;
 	// work out *true* source lobe
 	unsigned int srclobe[3] = {0, 0, 0};
 	for (unsigned int i = 0; i < 3; i++) {
 		// no lobe in the instinct?
-		if (!instinct.lobes[i])
+		if (!instinct.dendrites[i].lobe)
 			continue;
 
 		// TODO: instincts should be sanitised somewhere?
-		if (instinct.lobes[i] >= lobes.size())
+		if (instinct.dendrites[i].lobe >= lobes.size())
 			continue;
 
-		if (lobes[instinct.lobes[i]]->getGene()->perceptflag) {
+		if (lobes[instinct.dendrites[i].lobe]->getGene()->perceptflag) {
 			// perceptible! we can use this
-			srclobe[i] = instinct.lobes[i];
+			srclobe[i] = instinct.dendrites[i].lobe;
 		} else {
 			// Find a relay lobe. C2 requires the native size/input checks;
 			// C1 retains its existing perceptible-relay search.
@@ -1113,13 +1135,13 @@ bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
 				const auto& candidate = *lobes[j]->getGene();
 				if (c2) {
 					// 41ab20 requires the same cell count and an enabled input.
-					if (lobes[j]->getNoNeurons() != lobes[instinct.lobes[i]]->getNoNeurons())
+					if (lobes[j]->getNoNeurons() != lobes[instinct.dendrites[i].lobe]->getNoNeurons())
 						continue;
 				} else if (!candidate.perceptflag) {
 					continue;
 				}
-				if ((candidate.dendrite1.srclobe == instinct.lobes[i] && (!c2 || candidate.dendrite1.max)) ||
-					(candidate.dendrite2.srclobe == instinct.lobes[i] && (!c2 || candidate.dendrite2.max))) {
+				if ((candidate.dendrite1.srclobe == instinct.dendrites[i].lobe && (!c2 || candidate.dendrite1.max)) ||
+					(candidate.dendrite2.srclobe == instinct.dendrites[i].lobe && (!c2 || candidate.dendrite2.max))) {
 					srclobe[i] = j;
 					break;
 				}
@@ -1129,7 +1151,7 @@ bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
 		if (!srclobe[i]) {
 			fmt::print(
 				"instinct: ignoring source lob {} because it's not perceptible\n",
-				(int)instinct.lobes[i]);
+				(int)instinct.dendrites[i].lobe);
 		}
 	}
 
@@ -1139,13 +1161,13 @@ bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
 		if (!srclobe[i])
 			continue;
 
-		unsigned int offset = 0;
+		uint64_t offset = 0;
 		for (unsigned int j = 1; j < srclobe[i]; j++) {
 			if (!lobes[j]->getGene()->perceptflag)
 				continue;
 			offset += lobes[j]->getNoNeurons();
 		}
-		offset += instinct.neurons[i];
+		offset += instinct.dendrites[i].cell;
 
 		// original engine will happily go off the end of the lobe here!
 		// (see cdouble's posts about Canny norns causing crashes with instincts using non-perceptible lobes)
@@ -1154,9 +1176,9 @@ bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
 			fmt::print(
 				"instinct: ignoring offset {} (was lobe {}, now lobe {}, new offset {})\n",
 				(int)offset,
-				(int)instinct.lobes[i],
+				(int)instinct.dendrites[i].lobe,
 				(int)srclobe[i],
-				(int)instinct.neurons[i]);
+				(int)instinct.dendrites[i].cell);
 			if (c2)
 				return true; // C2 rejects the whole invalid wiring request.
 			continue;
@@ -1175,10 +1197,10 @@ bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
 		fmt::print("instinct failed: no concept lobe\n");
 		return true;
 	}
-	if (instinct.action >= lobes[6]->getNoNeurons()) {
+	if (instinct.motor_decision >= lobes[6]->getNoNeurons()) {
 		fmt::print(
 			"instinct failed: decision neuron {} is outside the decision lobe\n",
-			static_cast<unsigned int>(instinct.action));
+			static_cast<unsigned int>(instinct.motor_decision));
 		return true;
 	}
 	// TODO: verify the concept lobe does actually have type 0 dendrites pointing at the perceptible lobe?
@@ -1218,7 +1240,7 @@ bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
 	oldNeuron* conceptneu = lobes[8]->getNeuron(candidateneuron);
 	for (unsigned int i = 0; i < percept_neu_offsets.size(); i++) {
 		oldDendrite& dend = conceptneu->dendrites[0][i];
-		dend.ltw = dend.stw = dend.strength = instinct.level;
+		dend.ltw = dend.stw = dend.strength = instinct.reinforcement_amount;
 		if (c2)
 			dend.home_x = dend.home_y = dend.suscept = 0;
 		// in theory thanks to earlier sanity checks, all percept_neu_offsets should be in range
@@ -1226,12 +1248,12 @@ bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
 	}
 
 	// find relevant decision neuron
-	oldNeuron* decnneu = lobes[6]->getNeuron(instinct.action);
+	oldNeuron* decnneu = lobes[6]->getNeuron(instinct.motor_decision);
 
 	// work out relevant dendrite type
 	// type 1 for punishment chem, type 0 otherwise (reward)
 	// this is kind of horrible hardcoding (but then, so is the rest)
-	unsigned int type = (instinct.drive == 53 ? 1 : 0);
+	unsigned int type = (instinct.reinforcement_chemical == 53 ? 1 : 0);
 
 	// find a minimal-strength dendrite..
 	unsigned int candidatedendrite = 0xFFFFFFFF;
@@ -1255,7 +1277,7 @@ bool oldBrain::processInstinct(const creatureInstinctGene& gene) {
 
 	// finally, wire the concept neuron up to the relevant decision
 	oldDendrite& dend = decnneu->dendrites[type][candidatedendrite];
-	dend.ltw = dend.stw = dend.strength = instinct.level;
+	dend.ltw = dend.stw = dend.strength = instinct.reinforcement_amount;
 	dend.src = conceptneu;
 	if (c2)
 		dend.home_x = dend.home_y = dend.suscept = 0;

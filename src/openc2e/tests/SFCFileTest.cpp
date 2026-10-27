@@ -37,7 +37,7 @@ TEST(SFCFile, C2RoomPreservesSignedEnvironmentSources) {
 	write16le(out, 2); // floor points
 	for (uint32_t coordinate : {0u, 190u, 200u, 180u})
 		write32le(out, coordinate);
-	write32le(out, 0);
+	write32le(out, 0x12345678); // opaque room state need not be zero
 	write8(out, 4); // length-prefixed room music
 	out.write("test", 4);
 	write32le(out, 1); // drop status
@@ -59,6 +59,7 @@ TEST(SFCFile, C2RoomPreservesSignedEnvironmentSources) {
 	ASSERT_EQ(room->floorpoints.size(), 2u);
 	EXPECT_EQ(room->floorpoints[1].first, 200u);
 	EXPECT_EQ(room->floorpoints[1].second, 180u);
+	EXPECT_EQ(room->reserved_after_floorpoints, 0x12345678u);
 	EXPECT_EQ(room->music, "test");
 	EXPECT_EQ(room->dropstatus, 1u);
 	EXPECT_FALSE(in.has_data_left());

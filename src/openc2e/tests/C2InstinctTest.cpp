@@ -1,5 +1,6 @@
 #include "openc2e/creatures/oldBrain.h"
 #include "openc2e/creatures/C2DendriteCount.h"
+#include "fileformats/sfc/C2CreatureData.h"
 #include "openc2e/creatures/oldCreature.h"
 #include "openc2e/creatures/CreatureAgent.h"
 #include "common/io/SpanReader.h"
@@ -265,4 +266,74 @@ TEST_F(C2Instinct, LobeInitializationHonorsPairedMinimaWithoutEditingTheGene) {
 	}
 	EXPECT_EQ(gene.dendrite1.min, 0);
 	EXPECT_EQ(gene.dendrite2.min, 0);
+}
+
+TEST_F(C2Instinct, RestoresAnOwnedQueueAndRetainsArchiveIdentityAndPhase) {
+	auto gene = make_instinct();
+	creature.queue(gene); // A fresh constructor's queue must be replaced.
+	sfc::CreatureV2 saved;
+	auto record = std::make_shared<sfc::CInstinctV1>(brain.expressInstinct(gene));
+	record->phase = 37;
+	saved.instincts = {record, record};
+	saved.dreaming = 9;
+	creature.restoreC2Instincts(saved);
+	record->phase = 99; // The runtime must own its restored data.
+	sfc::CreatureV2 captured;
+	creature.updateC2Instincts(captured);
+	ASSERT_EQ(captured.instincts.size(), 2u);
+	EXPECT_EQ(captured.instincts[0], captured.instincts[1]);
+	EXPECT_NE(captured.instincts[0], record);
+	EXPECT_EQ(captured.instincts[0]->phase, 37u);
+	EXPECT_EQ(captured.dreaming, 9u);
+	EXPECT_EQ(creature.getNoUnprocessedInstincts(), 2u);
+	saved.instincts.clear();
+	saved.dreaming = 0;
+	creature.restoreC2Instincts(saved);
+	EXPECT_EQ(creature.getNoUnprocessedInstincts(), 0u);
+	EXPECT_FALSE(creature.isDreaming());
+}
+
+TEST_F(C2Instinct, SavedInstinctInputsAreNotExpressedAgain) {
+	sfc::CreatureV2 saved;
+	auto record = std::make_shared<sfc::CInstinctV1>(brain.expressInstinct(make_instinct()));
+	record->dendrites[0] = {1, 55};
+	saved.instincts = {record};
+	creature.restoreC2Instincts(saved);
+	ASSERT_EQ(creature.processInstincts(1), 1u);
+	// Native direct wiring reads the stored cell. Re-expression would fold 55
+	// modulo lobe 1's 41 cells, incorrectly connecting percept cell 14 instead.
+	EXPECT_EQ(brain.lobes[8]->getNeuron(0)->dendrites[0][0].src, brain.lobes[0]->getNeuron(55));
+	EXPECT_EQ(creature.getNoUnprocessedInstincts(), 0u);
+}
+
+TEST_F(C2Instinct, ResumedDreamingRetriesAndThenHonorsTheSavedAdultLimit) {
+	creature.setTestStage(child);
+	creature.setAsleep(true);
+	sfc::CreatureV2 saved;
+	auto record = std::make_shared<sfc::CInstinctV1>(brain.expressInstinct(make_instinct()));
+	saved.instincts = {record, record};
+	saved.dreaming = 1;
+	creature.restoreC2Instincts(saved);
+	auto& connections = brain.lobes[6]->getNeuron(0)->dendrites[0];
+	connections.clear();
+	creature.dreamStep();
+	sfc::CreatureV2 captured;
+	creature.updateC2Instincts(captured);
+	EXPECT_EQ(captured.dreaming, 1u);
+	EXPECT_EQ(captured.instincts.size(), 2u);
+	connections.emplace_back();
+	creature.dreamStep();
+	creature.updateC2Instincts(captured);
+	EXPECT_EQ(captured.dreaming, 0u);
+	EXPECT_EQ(captured.instincts.size(), 1u);
+	EXPECT_TRUE(creature.isAsleep());
+}
+
+TEST_F(C2Instinct, InvalidSavedQueueDoesNotDiscardPendingInstincts) {
+	auto gene = make_instinct();
+	creature.queue(gene);
+	sfc::CreatureV2 saved;
+	saved.instincts = {nullptr};
+	EXPECT_ANY_THROW(creature.restoreC2Instincts(saved));
+	EXPECT_EQ(creature.getNoUnprocessedInstincts(), 1u);
 }

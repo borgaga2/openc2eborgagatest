@@ -433,8 +433,9 @@ void CRoom::read() {
 		floorpoints.push_back(std::pair<uint32_t, uint32_t>(x, y));
 	}
 
-	// discard unknown bytes
-	sfccheck(read32() == 0);
+	// Original C2 saves can contain nonzero values here. Preserve the field
+	// without interpreting it until its runtime meaning is established.
+	reserved_after_floorpoints = read32();
 
 	music = readstring();
 	dropstatus = read32();

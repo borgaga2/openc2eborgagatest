@@ -148,6 +148,7 @@ class CRoom : public SFCClass {
 	int32_t heatsource, pressuresource, lightsource, radiationsource;
 	int32_t windx, windy;
 	std::vector<std::pair<uint32_t, uint32_t> > floorpoints;
+	uint32_t reserved_after_floorpoints = 0;
 	std::string music;
 	uint32_t dropstatus;
 
