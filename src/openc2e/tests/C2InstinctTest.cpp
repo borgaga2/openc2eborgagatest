@@ -1,4 +1,5 @@
 #include "openc2e/creatures/oldBrain.h"
+#include "openc2e/creatures/C2DendriteCount.h"
 #include "openc2e/creatures/oldCreature.h"
 #include "openc2e/creatures/CreatureAgent.h"
 #include "common/io/SpanReader.h"
@@ -67,6 +68,14 @@ creatureInstinctGene make_instinct() {
 	instinct.drive = 52;
 	instinct.level = 77;
 	return instinct;
+}
+
+oldDendriteInfo empty_dendrite_info() {
+	oldDendriteInfo info(2);
+	const std::array<uint8_t, 128> zeros{};
+	SpanReader input(zeros);
+	input >> info;
+	return info;
 }
 
 class C2Instinct : public testing::Test {
@@ -175,4 +184,85 @@ TEST_F(C2Instinct, NormalChemistryDoesNotAdvanceDuringInstinctLearning) {
 	creature.dreamStep();
 	creature.chemistrySample();
 	EXPECT_EQ(creature.getBiochemistryTicks(), before + 1);
+}
+
+TEST(C2DendriteCount, AllDrawPairsMatchTheNativeDistribution) {
+	auto first = empty_dendrite_info(), second = empty_dendrite_info();
+	first.min = 1;
+	first.max = 3;
+	// Exhaust all nine equally likely pairs. In particular, Saw and waS must
+	// both admit two inputs, needed by the original game's paired instincts.
+	const std::array<std::array<unsigned int, 3>, 4> expected = {{
+		{3, 3, 3}, {3, 5, 1}, {3, 4, 2}, {2, 4, 3}}};
+	for (unsigned int spread = 0; spread < 4; ++spread) {
+		SCOPED_TRACE(spread);
+		first.spread = spread;
+		std::array<unsigned int, 3> histogram{};
+		for (int a = 0; a <= 2; ++a) {
+			for (int b = 0; b <= 2; ++b) {
+				unsigned int draws = 0;
+				const auto counts = c2::initialDendriteCounts(first, second, [&](int maximum) {
+					if (maximum == 0)
+						return 0;
+					EXPECT_EQ(maximum, 2);
+					return draws++ == 0 ? a : b;
+				});
+				ASSERT_GE(counts[0], 1u);
+				ASSERT_LE(counts[0], 3u);
+				EXPECT_EQ(counts[1], 0u);
+				EXPECT_EQ(draws, spread == 0 ? 1u : 2u);
+				++histogram[counts[0] - 1];
+			}
+		}
+		EXPECT_EQ(histogram, expected[spread]);
+	}
+}
+
+TEST(C2DendriteCount, ZeroMinimaReserveOneInputInEitherEnabledType) {
+	auto first = empty_dendrite_info(), second = empty_dendrite_info();
+	first.max = second.max = 3;
+	for (int chosen = 0; chosen <= 1; ++chosen) {
+		unsigned int draws = 0;
+		const auto counts = c2::initialDendriteCounts(first, second, [&](int maximum) {
+			if (draws++ == 0) {
+				EXPECT_EQ(maximum, 1);
+				return chosen;
+			}
+			return 0;
+		});
+		EXPECT_EQ(counts[0], static_cast<unsigned int>(chosen));
+		EXPECT_EQ(counts[1], static_cast<unsigned int>(1 - chosen));
+	}
+	EXPECT_EQ(first.min, 0);
+	EXPECT_EQ(second.min, 0);
+}
+
+TEST(C2DendriteCount, DisabledInputsDoNotForceConnectionsOrChangeTheMaximum) {
+	auto first = empty_dendrite_info(), second = empty_dendrite_info();
+	for (unsigned int enabled = 0; enabled < 2; ++enabled) {
+		first.max = enabled == 0 ? 3 : 0;
+		second.max = enabled == 1 ? 3 : 0;
+		const auto minimum = c2::initialDendriteCounts(first, second, [](int) { return 0; });
+		EXPECT_EQ(minimum, (std::array<unsigned int, 2>{0, 0}));
+		const auto maximum = c2::initialDendriteCounts(first, second, [](int maximum) { return maximum; });
+		EXPECT_EQ(maximum[enabled], 3u);
+		EXPECT_EQ(maximum[1 - enabled], 0u);
+	}
+}
+
+TEST_F(C2Instinct, LobeInitializationHonorsPairedMinimaWithoutEditingTheGene) {
+	oldBrainLobeGene gene = *brain.lobes[8]->getGene();
+	gene.dendrite1.min = gene.dendrite2.min = 0;
+	gene.dendrite1.max = gene.dendrite2.max = 1;
+	oldLobe lobe(&brain, &gene);
+	lobe.init();
+	ASSERT_GT(lobe.getNoNeurons(), 0u);
+	for (unsigned int i = 0; i < lobe.getNoNeurons(); ++i) {
+		const auto& dendrites = lobe.getNeuron(i)->dendrites;
+		EXPECT_LE(dendrites[0].size(), 1u);
+		EXPECT_LE(dendrites[1].size(), 1u);
+		EXPECT_GE(dendrites[0].size() + dendrites[1].size(), 1u);
+	}
+	EXPECT_EQ(gene.dendrite1.min, 0);
+	EXPECT_EQ(gene.dendrite2.min, 0);
 }

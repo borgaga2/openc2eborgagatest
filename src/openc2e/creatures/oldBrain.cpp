@@ -18,6 +18,7 @@
  */
 
 #include "oldBrain.h"
+#include "C2DendriteCount.h"
 
 #include "common/Random.h"
 #include "common/Exception.h"
@@ -402,6 +403,13 @@ void oldLobe::init() {
 	oldDendriteInfo* dend_info[2] = {&ourGene->dendrite1, &ourGene->dendrite2};
 
 	for (auto& neuron : neurons) {
+		if (parent->getParent()->getGenome()->getVersion() == 2) {
+			const auto counts = c2::initialDendriteCounts(*dend_info[0], *dend_info[1],
+				[](int maximum) { return rand_int32(0, maximum); });
+			for (unsigned int type = 0; type < 2; ++type)
+				neuron.dendrites[type].resize(counts[type]);
+			continue;
+		}
 		for (unsigned int type = 0; type < 2; type++) {
 			int our_min = dend_info[type]->min;
 			int our_range = dend_info[type]->max - our_min;

@@ -23,8 +23,23 @@ Addresses below are virtual addresses in that executable, not portable symbols.
   coordinates and susceptibility. Missing decision connections return false;
   an unusable concept request is consumed rather than retried indefinitely.
 * `41e5d0` skips normal biochemistry while the dreaming count is nonzero.
+* `40d070`, specifically `40d164` through `40d36d`, initializes dendrite
+  counts. With range `r = maximum - minimum`, flat uses one uniform draw;
+  normal uses the integer average of two independent draws; Saw uses
+  `abs(a + b - r)`; waS uses `r - abs(a + b - r)`. Each draw is in `[0, r]`.
+  The minimum is added afterward. Doubling a single draw instead loses the
+  middle count when the range is two, preventing two-input instinct wiring.
+  Original saved concept lobes with minimum 1, maximum 3 and waS spread
+  contain all three counts, consistent with this code path.
+* The same initializer reserves one connection in a randomly chosen type
+  when both types have zero minima and nonzero maxima. The other type keeps
+  its zero minimum. This is an expressed initialization choice, not a gene
+  mutation. A disabled type does not trigger the reservation.
 
 `C2InstinctTest.cpp` checks relay selection, connection reset, expressed values,
-retry behavior, baby/adult limits and chemistry suspension. `c2playcheck` also
+retry behavior, baby/adult limits and chemistry suspension. It also exhausts
+the distribution's draw pairs and checks the paired-minimum rule. The C2 path
+uses openc2e's random generator; it does not reproduce the original global
+random sequence. C1's initialization is unchanged. `c2playcheck` also
 exercises the newborn queue using installed C2 assets. This does not implement
 complete saved-world creature loading or prove all brain/lifecycle behavior.
