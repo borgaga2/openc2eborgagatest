@@ -349,6 +349,7 @@ add_library(openc2e_core OBJECT
 	src/openc2e/SFCFile.cpp
 	src/openc2e/SimpleAgent.cpp
 	src/openc2e/creatures/SkeletalCreature.cpp
+	src/openc2e/creatures/C2SkeletonState.cpp
 	src/openc2e/Sound.cpp
 	src/openc2e/SoundManager.cpp
 	src/openc2e/Vehicle.cpp
@@ -397,6 +398,7 @@ add_executable(test_openc2e
 	src/openc2e/tests/C2OrganStateTest.cpp
 	src/openc2e/tests/C2BiochemistryStateTest.cpp
 	src/openc2e/tests/C2PhysiologyStateTest.cpp
+	src/openc2e/tests/C2SkeletonStateTest.cpp
 	src/openc2e/tests/C2InstinctTest.cpp
 )
 target_include_directories(test_openc2e PRIVATE src/openc2e)

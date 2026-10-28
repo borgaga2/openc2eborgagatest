@@ -41,7 +41,8 @@ struct CreatureV2 : ObjectV2 {
 	std::array<std::string, 2> parent_names;
 	std::shared_ptr<BodyV2> body;
 	std::array<std::shared_ptr<LimbV2>, 6> limbs;
-	uint8_t direction = 0, downfoot_left = 0;
+	// C2 stores 0 for the left foot and 1 for the right foot.
+	uint8_t direction = 0, downfoot_right = 0;
 	int32_t foot_x = 0, foot_y = 0;
 	uint32_t z_order = 0;
 	std::string current_pose;
@@ -91,7 +92,7 @@ struct CreatureV2 : ObjectV2 {
 		ar(body);
 		for (auto& limb : limbs)
 			ar(limb);
-		ar(direction); ar(downfoot_left); ar(foot_x); ar(foot_y); ar(z_order);
+		ar(direction); ar(downfoot_right); ar(foot_x); ar(foot_y); ar(z_order);
 		ar.ascii_mfcstring(current_pose);
 		ar(expression); ar(eyes_open); ar(asleep); ar(reserved_after_asleep);
 		for (auto& pose : poses)

@@ -25,9 +25,11 @@
 #include "fileformats/genomeFile.h"
 
 #include <cassert>
+#include <functional>
 #include <memory>
 
 class creaturesImage;
+namespace sfc { struct CreatureV2; }
 
 class SkeletalCreature : public Agent, public CreatureAgent {
   protected:
@@ -50,6 +52,10 @@ class SkeletalCreature : public Agent, public CreatureAgent {
 	creatureAppearanceGene* appearancegenes[6];
 	std::map<unsigned int, creaturePoseGene*> posegenes;
 	std::map<unsigned int, creatureGaitGene*> gaitgenes;
+	std::vector<std::unique_ptr<creaturePoseGene>> restored_pose_genes;
+	std::vector<std::unique_ptr<creatureGaitGene>> restored_gait_genes;
+	bool c2_cached_body = false;
+	bool c2_has_tail = true;
 
 	std::shared_ptr<creaturesImage> images[17];
 	attFile att[17];
@@ -85,6 +91,10 @@ class SkeletalCreature : public Agent, public CreatureAgent {
 
 	void skeletonInit();
 	void recalculateSkeleton();
+	// Restore visuals before registering the agent; do not call finishInit()
+	// afterward, since that replaces the saved pose and gallery with newborn data.
+	void restoreC2Body(const sfc::CreatureV2&,
+		const std::function<std::shared_ptr<creaturesImage>(const std::string&)>& load_image);
 
 	unsigned int getPose(unsigned int i) { return pose[i]; }
 	void setPose(unsigned int p);
@@ -95,10 +105,7 @@ class SkeletalCreature : public Agent, public CreatureAgent {
 	void tick();
 
 	unsigned int getPregnancy() { return pregnancy; }
-	void setPregnancy(unsigned int p) {
-		assert(p < 4);
-		pregnancy = p;
-	}
+	void setPregnancy(unsigned int p);
 	bool getEyesClosed() { return eyesclosed; }
 	void setEyesClosed(bool e) { eyesclosed = e; }
 	unsigned int getFacialExpression() { return facialexpression; }

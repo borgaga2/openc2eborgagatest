@@ -13,6 +13,9 @@
 #include "fileformats/sfc/C2SFCFile.h"
 #include "fileformats/sfc/C2CreatureData.h"
 #include "fileformats/MFCWriter.h"
+#include "fileformats/s16Image.h"
+#include "common/creaturesImage.h"
+#include "common/backend/Backend.h"
 #include "openc2e/Engine.h"
 #include "openc2e/Map.h"
 #include "openc2e/PointerAgent.h"
@@ -56,6 +59,78 @@ class SavedC2CreatureCheck : public c2Creature {
 	using c2Creature::c2Creature;
 	void sampleBiochemistry() { tickBiochemistry(); }
 };
+
+class SavedBodyRenderCheck : public RenderTarget {
+  public:
+	struct Draw { const void* pixels; int x, y; };
+	std::vector<Draw> draws;
+	void renderCreaturesImage(creaturesImage& image, unsigned int frame, int x, int y, RenderOptions options) override {
+		if (options.mirror || frame >= image.numframes()) throw Exception("Unexpected saved body rendering");
+		draws.push_back({image.data(frame), x, y});
+	}
+	void renderTexture(const Texture&, Rect2i, Rect2f, RenderOptions) override {}
+	void renderLine(float, float, float, float, Color) override {}
+	void blitRenderTarget(RenderTarget*, Rect2f) override {}
+	int32_t getWidth() const override { return 800; }
+	int32_t getHeight() const override { return 600; }
+	void setClip(Rect2f) override {}
+	void renderClear() override { draws.clear(); }
+	void setViewportOffsetTop(int) override {}
+	void setViewportOffsetBottom(int) override {}
+};
+
+static void checkSavedBody(SkeletalCreature& holder, const sfc::CreatureV2& saved,
+	const std::filesystem::path& save_path) {
+	std::map<std::string, std::shared_ptr<creaturesImage>> images;
+	auto load = [&](const std::string& name) {
+		auto& image = images[name];
+		if (!image) {
+			if (name.find_first_not_of("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") != std::string::npos || name.empty())
+				throw Exception("Invalid saved composite sprite name");
+			auto path = save_path.parent_path() / "Images" / (name + ".s16");
+			if (!std::filesystem::exists(path)) path = save_path.parent_path() / (name + ".s16");
+			FileReader input(path);
+			image = std::make_shared<creaturesImage>(name);
+			image->images = ReadS16File(input);
+		}
+		return image;
+	};
+	holder.restoreC2Body(saved, load);
+	const auto check_pose = [&](const char* phase) {
+	SavedBodyRenderCheck target;
+	holder.render(&target, static_cast<int>(holder.x), static_cast<int>(holder.y));
+	std::vector<const sfc::BodyPartV2*> parts{saved.body.get()};
+	for (auto limb : saved.limbs)
+		for (; limb; limb = limb->next) parts.push_back(limb.get());
+	if (target.draws.size() != parts.size()) throw Exception("Restored C2 body has the wrong number of rendered parts");
+	for (const auto* part : parts) {
+		const auto gallery = load(part->gallery->filename);
+		const auto frame = part->gallery->absolute_base + part->pose_plus_base;
+		const auto found = std::find_if(target.draws.begin(), target.draws.end(), [&](const auto& draw) {
+			return draw.pixels == gallery->data(frame) && draw.x == part->x && draw.y == part->y;
+		});
+		if (found == target.draws.end()) {
+			const auto same_frame = std::find_if(target.draws.begin(), target.draws.end(), [&](const auto& draw) {
+				return draw.pixels == gallery->data(frame);
+			});
+			throw Exception(fmt::format("Restored C2 {} body {}: expected frame {} at {},{}; matching frame at {},{}", saved.moniker,
+				phase, frame, part->x, part->y, same_frame == target.draws.end() ? -1 : same_frame->x,
+				same_frame == target.draws.end() ? -1 : same_frame->y));
+		}
+		target.draws.erase(found);
+	}
+	const unsigned int foot = saved.downfoot_right ? 12 : 11;
+	if (holder.x + holder.attachmentX(foot, 1) != saved.foot_x ||
+		holder.y + holder.attachmentY(foot, 1) != saved.foot_y)
+		throw Exception(fmt::format("Restored C2 {} planted foot differs: saved {},{}; left {},{}; right {},{}", saved.moniker,
+			saved.foot_x, saved.foot_y, holder.x + holder.attachmentX(11, 1), holder.y + holder.attachmentY(11, 1),
+			holder.x + holder.attachmentX(12, 1), holder.y + holder.attachmentY(12, 1)));
+	};
+	check_pose("on restore");
+	holder.setPose(saved.current_pose);
+	check_pose("after recalculation");
+	fmt::print("C2 saved body check passed: {} ({} sprite frames, positions and planted foot, before and after pose recalculation)\n", saved.moniker, saved.limbs[5] ? 14 : 12);
+}
 
 // An opt-in integration check against a user's installed C2 assets. It runs
 // the real world, scripts, skeleton and biochemistry with the null renderer.
@@ -147,6 +222,7 @@ int main(int argc, char** argv) {
 				if (saved_genome->getVersion() != 2 || !saved->brain)
 					throw Exception("Saved creature is missing its C2 genome or brain");
 				SkeletalCreature holder(4);
+				checkSavedBody(holder, *saved, std::filesystem::path(argv[2]));
 				SavedC2CreatureCheck restored(saved_genome, saved->sex == 2, 0, &holder);
 				auto& brain = *restored.getBrain();
 				brain.restoreC2State(*saved->brain);

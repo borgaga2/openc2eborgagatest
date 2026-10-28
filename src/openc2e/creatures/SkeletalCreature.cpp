@@ -182,10 +182,31 @@ creatureAppearanceGene* SkeletalCreature::appearanceGeneForPart(char x) {
 }
 
 void SkeletalCreature::skeletonInit() {
+	if (c2_cached_body) {
+		if (!creature)
+			throw Exception("Cannot rebuild a saved C2 body without its creature genome");
+		// Rebuild the appearance selection through the saved life stage without
+		// replaying physiology or replacing the saved pose and gait tables.
+		for (unsigned int stage = 0; stage <= creature->getStage(); ++stage) {
+			for (auto& gene : creature->getGenome()->genes) {
+				auto* appearance = dynamic_cast<creatureAppearanceGene*>(gene.get());
+				if (!appearance || appearance->part > 5 || gene->header.switchontime != stage)
+					continue;
+				const auto& flags = gene->header.flags;
+				if (flags.notexpressed || (flags.femaleonly && !creature->isFemale()) ||
+					(flags.maleonly && creature->isFemale()))
+					continue;
+				appearancegenes[appearance->part] = appearance;
+			}
+		}
+	}
+	c2_cached_body = false;
 	// TODO: the exception throwing in here needs some more thought
 	// TODO: if we throw an exception when we need to kill the creature off, else segfault :/
 
 	for (int i = 0; i < SkeletalPartCount(); i++) { // CV hackery
+		if (engine.version == 2 && !c2_has_tail && (i == 6 || i == 13))
+			continue;
 		if (engine.version == 1) // TODO: this is hackery to skip tails for C1
 			if (i == 6 || i == 13)
 				continue;
@@ -279,6 +300,8 @@ void SkeletalCreature::render(RenderTarget* renderer, int xoffset, int yoffset) 
 		int i = cee_zorder[posedirection][j];
 		if (i >= SkeletalPartCount())
 			continue; // CV hackery
+		if (engine.version == 2 && !c2_has_tail && (i == 6 || i == 13))
+			continue;
 
 		if (engine.version == 1) // TODO: this is hackery to skip tails for C1
 			if (i == 6 || i == 13)
@@ -296,7 +319,8 @@ void SkeletalCreature::render(RenderTarget* renderer, int xoffset, int yoffset) 
 
 		// adjust for pregnancy/facial expressions/etc as necessary
 		if (part->parent == -1) { // body
-			ourpose += (pregnancy * (engine.version < 3 ? 10 : 16));
+			if (!c2_cached_body)
+				ourpose += (pregnancy * (engine.version < 3 ? 10 : 16));
 		} else if (i == 1) { // head
 			ourpose += (eyesclosed ? (engine.version < 3 ? 10 : 16) : 0) + (facialexpression * (engine.version < 3 ? 20 : 32));
 		} else if (i == 16) { // hair
@@ -335,6 +359,8 @@ void SkeletalCreature::recalculateSkeleton() {
 	int lowestx = 0, lowesty = 0, highestx = 0, highesty = 0;
 
 	for (int i = 0; i < SkeletalPartCount(); i++) {
+		if (engine.version == 2 && !c2_has_tail && (i == 6 || i == 13))
+			continue;
 		if (engine.version == 1) // TODO: this is hackery to skip tails for C1
 			if (i == 6 || i == 13)
 				continue;
@@ -549,6 +575,8 @@ void SkeletalCreature::setPose(unsigned int p) {
 }
 
 void SkeletalCreature::setPose(std::string s) {
+	if (s.size() < 15)
+		throw Exception("Creature pose is shorter than its direction and fourteen body parts");
 	switch (s[0]) {
 		case '?': // towards object of attention
 			switch (direction) {
@@ -587,6 +615,12 @@ void SkeletalCreature::setPose(std::string s) {
 			case '2': newpose = 2; break;
 			case '3': newpose = 3; break;
 			case '4': newpose = (engine.version < 3) ? 8 : 10; break; // 'to camera'
+			case '5':
+				if (engine.version == 2) {
+					newpose = 9; // C2's other front/back head view
+					break;
+				}
+				continue;
 			case '?':
 				assert(i == 0);
 				{ // TODO
@@ -804,6 +838,17 @@ void SkeletalCreature::creatureAged() {
 	processGenes();
 	skeletonInit();
 	recalculateSkeleton();
+}
+
+void SkeletalCreature::setPregnancy(unsigned int p) {
+	assert(p < 4);
+	if (p != pregnancy && c2_cached_body) {
+		// C2's saved composite contains only the current ten body views.
+		// A changed shape requires ordinary breed assets with pregnancy frames.
+		skeletonInit();
+		recalculateSkeleton();
+	}
+	pregnancy = p;
 }
 
 std::string SkeletalCreature::getFaceSpriteName() {
