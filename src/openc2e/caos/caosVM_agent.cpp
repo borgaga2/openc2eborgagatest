@@ -604,7 +604,8 @@ void c_ANIM(caosVM* vm) {
 
 	AnimatablePart* p = vm->getCurrentAnimatablePart();
 	THROW_IFNOT(p);
-	p->animation = bs;
+	p->animation.assign(bs.begin(), bs.end());
+	p->animation_loop_marker = 255;
 
 	if (!bs.empty())
 		p->setFrameNo(0); // TODO: correct?
@@ -616,6 +617,7 @@ void c_ANIM(caosVM* vm) {
  %variants c1 c2
 
  Sets the animation string for TARG, in the format '1234'.
+ C2 creatures use three digits per pose, for example '042043R'.
  If it ends with 'R', loops back to the beginning.
 */
 void c_ANIM_c2(caosVM* vm) {
@@ -623,9 +625,11 @@ void c_ANIM_c2(caosVM* vm) {
 
 	valid_agent(vm->targ);
 
-	// TODO: support creatures (using AnimatablePart, see c2e ANIM) for this (with format like "001002003R")
-	if (dynamic_cast<SkeletalCreature*>(vm->targ.get()))
+	if (auto* creature = dynamic_cast<SkeletalCreature*>(vm->targ.get())) {
+		if (engine.version == 2)
+			creature->setC2Animation(animstring);
 		return;
+	}
 
 	SpritePart* p = vm->getCurrentSpritePart();
 	THROW_IFNOT(p);
@@ -677,7 +681,8 @@ void c_ANMS(caosVM* vm) {
 
 	AnimatablePart* p = vm->getCurrentAnimatablePart();
 	THROW_IFNOT(p);
-	p->animation = animation;
+	p->animation.assign(animation.begin(), animation.end());
+	p->animation_loop_marker = 255;
 
 	if (!animation.empty())
 		p->setFrameNo(0); // TODO: correct?

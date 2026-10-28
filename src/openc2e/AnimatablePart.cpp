@@ -12,7 +12,7 @@ void AnimatablePart::updateAnimation() {
 		return;
 	assert(frameno < animation.size());
 
-	if (animation[frameno] == 255) {
+	if (animation[frameno] == animation_loop_marker) {
 		if (frameno == (animation.size() - 1)) {
 			frameno = 0;
 		} else {

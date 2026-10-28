@@ -101,6 +101,7 @@ class SkeletalCreature : public Agent, public CreatureAgent {
 	void setPose(std::string s);
 	void setPoseGene(unsigned int p);
 	void setGaitGene(unsigned int g);
+	void setC2Animation(const std::string& sequence);
 
 	void tick();
 

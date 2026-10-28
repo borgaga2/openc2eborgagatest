@@ -18,7 +18,7 @@ void ButtonPart::mouseIn() {
 	// TODO: what if ANIM is called during mouse hover?
 	if (hoveranimation.size()) {
 		oldanim = animation;
-		animation = hoveranimation;
+		animation.assign(hoveranimation.begin(), hoveranimation.end());
 		setFrameNo(0);
 	}
 }

@@ -1,5 +1,9 @@
 #include "openc2e/creatures/SkeletalCreature.h"
 #include "openc2e/Engine.h"
+#include "openc2e/Map.h"
+#include "openc2e/World.h"
+#include "openc2e/caosScript.h"
+#include "openc2e/caosVM.h"
 #include "common/Exception.h"
 #include "common/creaturesImage.h"
 #include "fileformats/sfc/C2CreatureData.h"
@@ -22,8 +26,17 @@ class BodyAgent : public SkeletalCreature {
 class C2SkeletonState : public testing::Test {
   protected:
 	int previous_version = engine.version;
-	void SetUp() override { engine.version = 2; }
-	void TearDown() override { engine.version = previous_version; }
+	std::unique_ptr<Map> previous_map;
+	void SetUp() override {
+		engine.version = 2;
+		previous_map = std::move(world.map);
+		world.map = std::make_unique<Map>();
+		world.map->addMetaRoom(0, 0, 2000, 1000, "", true);
+	}
+	void TearDown() override {
+		world.map = std::move(previous_map);
+		engine.version = previous_version;
+	}
 	std::shared_ptr<creaturesImage> gallery() {
 		auto image = std::make_shared<creaturesImage>("test");
 		for (unsigned int i = 0; i < 250; ++i) {
@@ -100,6 +113,90 @@ TEST_F(C2SkeletonState, RestoresCompositeSlicesAttachmentsAndSavedAnimationTable
 	EXPECT_EQ(agent.poseText(17), s.poses[17]);
 	EXPECT_EQ(agent.gaitStep(3, 7), 24u);
 	EXPECT_EQ(agent.facing(), 0u);
+}
+
+TEST_F(C2SkeletonState, C2AnimCommandPlaysTripletPosesAndRepeatsIncludingPose255) {
+	auto agent = std::make_shared<BodyAgent>();
+	auto s = saved();
+	s.poses[17] = "222222222222222";
+	s.poses[255] = "233333333333333";
+	agent->restoreC2Body(s, [&](const auto&) { return gallery(); });
+	auto* part = dynamic_cast<AnimatablePart*>(agent->part(0));
+	caosScript script("c2", "animation-test");
+	script.parse("anim [017255R]");
+	caosVM vm(agent.get());
+	vm.runEntirely(script.installer);
+	EXPECT_EQ(agent->getPose(1), 9u); // ANIM does not apply a pose immediately.
+	part->tick();
+	EXPECT_EQ(agent->getPose(1), 2u);
+	part->tick();
+	EXPECT_EQ(agent->getPose(1), 3u);
+	part->tick();
+	EXPECT_EQ(agent->getPose(1), 2u);
+	EXPECT_EQ(part->getFrameNo(), 1u);
+}
+
+TEST_F(C2SkeletonState, FiniteC2AnimationReleasesOverAfterItsLastPose) {
+	auto agent = std::make_shared<BodyAgent>();
+	auto s = saved();
+	s.poses[18] = "233333333333333";
+	agent->restoreC2Body(s, [&](const auto&) { return gallery(); });
+	auto* part = dynamic_cast<AnimatablePart*>(agent->part(0));
+	caosScript script("c2", "animation-test");
+	script.parse("anim [017018],over,setv ov00 7,endm");
+	caosVM vm(agent.get());
+	ASSERT_TRUE(vm.fireScript(script.installer, false));
+	vm.tick(); // ANIM
+	vm.timeslice = 1;
+	vm.tick(); // OVER blocks
+	EXPECT_TRUE(vm.isBlocking());
+	part->tick();
+	EXPECT_TRUE(vm.isBlocking());
+	EXPECT_EQ(agent->var[0].getInt(), 0);
+	part->tick();
+	EXPECT_FALSE(vm.isBlocking());
+	for (unsigned i = 0; i < 4 && !vm.stopped(); ++i) {
+		vm.timeslice = 1;
+		vm.tick();
+	}
+	EXPECT_EQ(agent->var[0].getInt(), 7);
+	EXPECT_EQ(agent->getPose(1), 3u);
+	part->tick();
+	EXPECT_EQ(agent->getPose(1), 3u);
+}
+
+TEST_F(C2SkeletonState, InvalidC2AnimationPreservesSequenceAndCursor) {
+	BodyAgent agent;
+	agent.restoreC2Body(saved(), [&](const auto&) { return gallery(); });
+	agent.setC2Animation("017017R");
+	auto* part = dynamic_cast<AnimatablePart*>(agent.part(0));
+	part->tick();
+	const auto animation = part->animation;
+	for (const auto& invalid : {"01", "017R018", "R", "256", "01x"}) {
+		EXPECT_THROW(agent.setC2Animation(invalid), Exception);
+		EXPECT_EQ(part->animation, animation);
+		EXPECT_EQ(part->getFrameNo(), 1u);
+	}
+	agent.setC2Animation("");
+	EXPECT_TRUE(part->animation.empty());
+}
+
+TEST_F(C2SkeletonState, ByteAnimationKeepsItsOriginalRepeatMarkerAndOffset) {
+	auto agent = std::make_shared<BodyAgent>();
+	auto s = saved();
+	s.poses[18] = "233333333333333";
+	agent->restoreC2Body(s, [&](const auto&) { return gallery(); });
+	agent->setC2Animation("017R");
+	caosScript script("c3", "animation-test");
+	script.parse("anim [17 18 255 1]");
+	caosVM vm(agent.get());
+	vm.runEntirely(script.installer);
+	auto* part = dynamic_cast<AnimatablePart*>(agent->part(0));
+	part->tick();
+	part->tick();
+	part->tick();
+	EXPECT_EQ(part->getFrameNo(), 2u);
+	EXPECT_EQ(agent->getPose(1), 3u);
 }
 
 TEST_F(C2SkeletonState, RestoresAllFacingDirectionsAndRightFoot) {

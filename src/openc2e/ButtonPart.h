@@ -8,7 +8,7 @@ class ButtonPart : public SpritePart {
 	bool hitopaquepixelsonly;
 	int messageid;
 	bytestring_t hoveranimation;
-	bytestring_t oldanim;
+	std::vector<uint16_t> oldanim;
 
   public:
 	ButtonPart(Agent* p, unsigned int _id, std::string spritefile, unsigned int fimg, int _x, int _y,

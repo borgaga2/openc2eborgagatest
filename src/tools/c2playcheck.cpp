@@ -435,6 +435,26 @@ int main(int argc, char** argv) {
 		const auto run_c2_agent_script = [&](const std::string& source) {
 			return run_c2_agent_script_as(newborn, AgentRef(), source);
 		};
+		auto* skeleton = dynamic_cast<SkeletalCreature*>(newborn.get());
+		if (!skeleton) throw Exception("C2 animation check needs a skeletal creature");
+		const auto visible_pose = [&] {
+			std::array<unsigned int, 14> pose;
+			for (unsigned int i = 0; i < pose.size(); ++i) pose[i] = skeleton->getPose(i);
+			return pose;
+		};
+		skeleton->setPoseGene(42);
+		const auto pose42 = visible_pose();
+		skeleton->setPoseGene(43);
+		const auto pose43 = visible_pose();
+		if (pose42 == pose43) throw Exception("Installed C2 poses 42 and 43 must differ for the animation check");
+		(void)run_c2_agent_script("anim [042043R]");
+		if (visible_pose() != pose43) throw Exception("C2 ANIM changed pose before the next part tick");
+		for (const auto& expected : {pose42, pose43, pose42, pose43}) {
+			skeleton->part(0)->tick();
+			if (visible_pose() != expected) throw Exception("C2 ANIM did not play and repeat the installed creature poses");
+		}
+		(void)run_c2_agent_script("pose 12");
+		fmt::print("C2 creature animation check passed: original pose sequence 042043R\n");
 		(void)run_c2_agent_script("gene load targ 3 \"norn\"");
 		const auto loaded_genome = newborn->genome_slots.find(3);
 		if (loaded_genome == newborn->genome_slots.end() || !loaded_genome->second || loaded_genome->second->getVersion() != 2)

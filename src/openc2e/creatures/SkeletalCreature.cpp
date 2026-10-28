@@ -687,6 +687,34 @@ void SkeletalCreature::setPoseGene(unsigned int poseno) {
 	setPose(g->getPoseString());
 }
 
+void SkeletalCreature::setC2Animation(const std::string& sequence) {
+	std::vector<uint16_t> animation;
+	const bool repeat = !sequence.empty() && sequence.back() == 'R';
+	const size_t digits = sequence.size() - (repeat ? 1 : 0);
+	if (digits % 3 || (repeat && digits == 0))
+		throw Exception("Invalid C2 creature animation length");
+	for (size_t i = 0; i < digits; i += 3) {
+		unsigned int pose = 0;
+		for (size_t j = 0; j < 3; ++j) {
+			const char c = sequence[i + j];
+			if (c < '0' || c > '9')
+				throw Exception("Invalid C2 creature animation digit");
+			pose = pose * 10 + c - '0';
+		}
+		if (pose > 255)
+			throw Exception("C2 creature animation pose exceeds 255");
+		animation.push_back(pose);
+	}
+	if (repeat) animation.push_back(256);
+	// Commit only after parsing; setting an animation must not change the
+	// visible pose until the next part tick.
+	skeleton->animation = std::move(animation);
+	skeleton->animation_loop_marker = 256;
+	if (!skeleton->animation.empty()) skeleton->setFrameNo(0);
+	gaitgene = nullptr;
+	walking = approaching = false;
+}
+
 void SkeletalCreature::setGaitGene(unsigned int gaitdrive) { // TODO: not sure if this is *useful*
 	std::map<unsigned int, creatureGaitGene*>::iterator i = gaitgenes.find(gaitdrive);
 	if (i == gaitgenes.end())
