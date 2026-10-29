@@ -1,4 +1,9 @@
 #include "openc2e/SFCFile.h"
+#include "openc2e/Agent.h"
+#include "openc2e/Engine.h"
+#include "common/Exception.h"
+#include <algorithm>
+#include <memory>
 
 #include "common/endianlove.h"
 #include "common/io/SpanReader.h"
@@ -63,4 +68,53 @@ TEST(SFCFile, C2RoomPreservesSignedEnvironmentSources) {
 	EXPECT_EQ(room->music, "test");
 	EXPECT_EQ(room->dropstatus, 1u);
 	EXPECT_FALSE(in.has_data_left());
+}
+
+TEST(SFCFile, RestoresC2TimerCountdownAndPreservesC1Conversion) {
+	struct Environment {
+		int version = engine.version;
+		std::string gametype = engine.gametype;
+		~Environment() { engine.version = version; engine.gametype = gametype; }
+	} environment;
+	engine.version = 2; engine.gametype = "c2";
+	class TimerAgent : public Agent {
+	  public:
+		TimerAgent() : Agent(2, 1, 1, 1000) {}
+		CompoundPart* part(unsigned int) override { return nullptr; }
+		void physicsTick() override {}
+	};
+	auto agent = std::make_shared<TimerAgent>();
+	SFCFile archive;
+	archive.setVersion(1);
+	SFCSimpleObject saved(&archive);
+	saved.tickreset = 8;
+	for (unsigned int remaining : {8u, 5u, 1u, 0u}) {
+		saved.tickstate = remaining;
+		saved.copyTimerToAgent(*agent);
+		const auto delay = std::max(1u, remaining);
+		EXPECT_EQ(agent->getTicksUntilTimer(), delay);
+		for (unsigned int tick = 1; tick < delay; ++tick) {
+			agent->tick();
+			EXPECT_EQ(agent->getTicksUntilTimer(), delay - tick);
+		}
+		agent->tick();
+		EXPECT_EQ(agent->getTicksUntilTimer(), 8u);
+	}
+	saved.tickreset = saved.tickstate = 0;
+	saved.copyTimerToAgent(*agent);
+	agent->tick();
+	EXPECT_EQ(agent->getTicksUntilTimer(), 0u);
+	saved.tickreset = 8; saved.tickstate = 9;
+	EXPECT_THROW(saved.copyTimerToAgent(*agent), Exception);
+	EXPECT_EQ(agent->timerrate, 0u);
+	engine.version = 1; engine.gametype = "c1";
+	SFCFile c1archive;
+	c1archive.setVersion(0);
+	SFCSimpleObject c1saved(&c1archive);
+	c1saved.tickreset = 8; c1saved.tickstate = 5;
+	c1saved.copyTimerToAgent(*agent);
+	EXPECT_EQ(agent->getTicksUntilTimer(), 3u);
+	c1saved.tickstate = 8;
+	c1saved.copyTimerToAgent(*agent);
+	EXPECT_EQ(agent->getTicksUntilTimer(), 8u);
 }

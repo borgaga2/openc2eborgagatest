@@ -210,6 +210,7 @@ class SFCObject : public SFCClass {
 	CGallery* sprite;
 
 	uint32_t tickreset, tickstate;
+	void copyTimerToAgent(class Agent& agent) const;
 
 	uint32_t variables[100];
 

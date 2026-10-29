@@ -502,6 +502,21 @@ void SFCEntity::read() {
 	}
 }
 
+void SFCObject::copyTimerToAgent(Agent& agent) const {
+	if (parent->version() == 1) {
+		// C2 saves a countdown, not elapsed ticks. Native TICK sets both
+		// fields, then each update decrements the second and fires at <= 0.
+		if (tickreset > 0x7fffffffu || tickstate > tickreset)
+			throw Exception("Unsupported C2 saved timer state");
+		agent.timerrate = tickreset;
+		agent.tickssincelasttimer = tickreset ? tickreset - std::max(1u, tickstate) : 0;
+	} else {
+		// Preserve the existing C1 conversion until its native state is audited.
+		agent.timerrate = tickreset;
+		agent.tickssincelasttimer = tickstate == tickreset ? 0 : tickstate;
+	}
+}
+
 void SFCObject::read() {
 	// read genus, family and species
 	if (parent->version() == 0) {
@@ -983,10 +998,7 @@ void SFCCompoundObject::copyToWorld() {
 	a->actv = actv;
 
 	// ticking
-	a->tickssincelasttimer = tickstate;
-	if (a->tickssincelasttimer == tickreset)
-		a->tickssincelasttimer = 0;
-	a->timerrate = tickreset;
+	copyTimerToAgent(*a);
 
 	for (unsigned int i = 0; i < (parent->version() == 0 ? 3 : 100); i++)
 		a->var[i].setInt(variables[i]);
@@ -1063,10 +1075,7 @@ void SFCSimpleObject::copyToWorld() {
 	a->clac[2] = bhvrclick[2];
 
 	// ticking
-	a->tickssincelasttimer = tickstate;
-	if (a->tickssincelasttimer == tickreset)
-		a->tickssincelasttimer = 0;
-	a->timerrate = tickreset;
+	copyTimerToAgent(*a);
 
 	for (unsigned int i = 0; i < (parent->version() == 0 ? 3 : 100); i++)
 		a->var[i].setInt(variables[i]);
@@ -1212,10 +1221,7 @@ void SFCScenery::copyToWorld() {
 	a->actv = actv;
 
 	// ticking
-	a->tickssincelasttimer = tickstate;
-	if (a->tickssincelasttimer == tickreset)
-		a->tickssincelasttimer = 0;
-	a->timerrate = tickreset;
+	copyTimerToAgent(*a);
 
 	for (unsigned int i = 0; i < (parent->version() == 0 ? 3 : 100); i++)
 		a->var[i].setInt(variables[i]);
