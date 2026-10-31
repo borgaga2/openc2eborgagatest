@@ -212,6 +212,7 @@ add_library(openc2e-fileformats STATIC
 	src/fileformats/sfc/EXPFile.cpp
 	src/fileformats/sfc/SFCFile.cpp
 	src/fileformats/sfc/C2SFCFile.cpp
+	src/fileformats/C2SpeechResources.cpp
 )
 target_include_directories(openc2e-fileformats PRIVATE src/fileformats)
 target_link_libraries(openc2e-fileformats
@@ -234,6 +235,7 @@ add_executable(test_fileformats
 	src/fileformats/tests/C2BodyDataTest.cpp
 	src/fileformats/tests/C2BiochemistryDataTest.cpp
 	src/fileformats/tests/C2CreatureDataTest.cpp
+	src/fileformats/tests/C2SpeechResourcesTest.cpp
 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(test_fileformats BEFORE PRIVATE -Wconversion -Wsign-conversion -Wsign-compare)
@@ -347,6 +349,7 @@ add_library(openc2e_core OBJECT
 	src/openc2e/Room.cpp
 	src/openc2e/Scriptorium.cpp
 	src/openc2e/SFCFile.cpp
+	src/openc2e/C2Hearing.cpp
 	src/openc2e/SimpleAgent.cpp
 	src/openc2e/creatures/SkeletalCreature.cpp
 	src/openc2e/creatures/C2SkeletonState.cpp
@@ -399,6 +402,7 @@ add_executable(test_openc2e
 	src/openc2e/tests/C2BiochemistryStateTest.cpp
 	src/openc2e/tests/C2PhysiologyStateTest.cpp
 	src/openc2e/tests/C2SkeletonStateTest.cpp
+	src/openc2e/tests/C2HearingTest.cpp
 	src/openc2e/tests/C2InstinctTest.cpp
 )
 target_include_directories(test_openc2e PRIVATE src/openc2e)

@@ -122,12 +122,38 @@ void Blackboard::stopEditing(bool losingfocus) {
 }
 
 #include "Bubble.h"
+#include "AgentHelpers.h"
+#include "C2HearingRange.h"
+#include "creatures/CreatureAgent.h"
+#include "creatures/oldCreature.h"
+#include "fileformats/C2SpeechResources.h"
 void Blackboard::broadcast(bool audible) {
-	// TODO: blackboard broadcasts
-
+	const auto text = getText();
+	if (engine.version == 2 && text.empty()) return;
 	if (audible) {
-		Bubble::newBubble(this, true, getText());
+		Bubble::newBubble(this, true, text);
 	}
+	if (engine.version != 2 || !engine.c2_speech_resources) return;
+	// Native BBD: EMIT 0 uses visibility, not the creature's selected
+	// attention target. Deliver the board's numeric vocabulary ID.
+	for (const auto& agent : world.agents) {
+		if (!agent || agent.get() == this) continue;
+		auto* holder = dynamic_cast<CreatureAgent*>(agent.get());
+		auto* creature = holder ? dynamic_cast<c2Creature*>(holder->getCreature()) : nullptr;
+		if (creature && (audible ? c2CanHear(agent.get(), this) : agentIsVisible(agent.get(), this)))
+			agent->queueScript(7, this);
+	}
+}
+
+bool Blackboard::deliverWordTo(Agent* recipient) {
+	if (engine.version != 2 || !engine.c2_speech_resources || !recipient) return false;
+	auto* holder = dynamic_cast<CreatureAgent*>(recipient);
+	auto* creature = holder ? dynamic_cast<c2Creature*>(holder->getCreature()) : nullptr;
+	if (!creature || !creature->isAlive() || creature->isAsleep()) return false;
+	if (!var[0].hasInt() || var[0].getInt() < 0 || static_cast<size_t>(var[0].getInt()) >= strings.size()) return false;
+	const auto& [word,text] = strings[var[0].getInt()];
+	if (word >= 86 || text.empty()) return false;
+	return creature->learnC2Word(word,text,engine.c2_speech_resources->pronunciation_rules);
 }
 
 BlackboardPart::BlackboardPart(Blackboard* p, unsigned int _id)

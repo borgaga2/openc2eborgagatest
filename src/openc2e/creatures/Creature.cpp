@@ -18,6 +18,8 @@
  */
 
 #include "Creature.h"
+#include "Engine.h"
+#include "common/Random.h"
 
 #include "Catalogue.h"
 #include "CreatureAgent.h"
@@ -334,7 +336,7 @@ c1Creature::c1Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned c
 	brain->init();
 }
 
-c2Creature::c2Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a)
+c2Creature::c2Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a, bool initialize_language)
 	: oldCreature(g, is_female, _variant, a) {
 	assert(g->getVersion() == 2);
 
@@ -351,6 +353,10 @@ c2Creature::c2Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned c
 	brain = new oldBrain(this);
 	finishInit();
 	brain->init();
+	if (initialize_language && engine.c2_speech_resources) {
+		auto seed = rand_uint32();
+		initializeC2Language(*engine.c2_speech_resources, seed);
+	}
 }
 
 c2eCreature::c2eCreature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a)

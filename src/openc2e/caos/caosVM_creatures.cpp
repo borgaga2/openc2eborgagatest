@@ -19,8 +19,10 @@
 
 #include "AgentHelpers.h"
 #include "Bubble.h"
+#include "C2HearingRange.h"
 #include "Engine.h"
 #include "Map.h"
+#include "MetaRoom.h"
 #include "PathResolver.h"
 #include "World.h"
 #include "caosVM.h"
@@ -132,6 +134,7 @@ bool receivesLegacyStimulus(Agent* source, Agent* creature, LegacyStimulusRoute 
 			MetaRoom* creatureMeta = world.map->metaRoomAt(creatureX, creatureY);
 			if (!sourceMeta || sourceMeta != creatureMeta)
 				return false;
+			if (engine.version == 2) return c2CanHear(creature, source);
 			return (dx * dx + dy * dy) <= creature->range * creature->range;
 		}
 	}
@@ -1837,10 +1840,13 @@ void c_SAYN(caosVM* vm) {
 
 	// The stock vocabulary stores the corresponding need words at 56..72.
 	const size_t word = 56 + most_pressing_drive;
-	if (drive_count == 0 || word >= engine.wordlist.size())
+	if (drive_count == 0 || word >= (dynamic_cast<c2Creature*>(creature) ? 86 : engine.wordlist.size()))
 		return;
-	Bubble::newBubble(vm->targ.get(), true, engine.wordlist[word]);
-	vm->targ->speak(engine.wordlist[word]);
+	const auto* c2 = dynamic_cast<c2Creature*>(creature);
+	const std::string text = c2 ? c2->getC2SpokenWord(word) : engine.wordlist[word];
+	if (text.empty()) return;
+	Bubble::newBubble(vm->targ.get(), true, text);
+	vm->targ->speak(text);
 }
 
 /**
@@ -1995,15 +2001,19 @@ void c_INJR(caosVM* vm) {
  %status maybe
  %variants c1 c2
 
- Speak a word from the game's built-in vocabulary and alert creatures in earshot.
+ Speak a vocabulary word and alert creatures in earshot. C2 uses the creature's
+ learned output string; an unknown output does not speak the global word.
 */
 void c_SAY_WORD(caosVM* vm) {
 	VM_PARAM_INTEGER(word)
 	Creature* creature = vm->getTargCreature();
-	if (word < 0 || static_cast<size_t>(word) >= engine.wordlist.size() || !creature->isAlive() || creature->isAsleep())
+	const size_t vocabulary_size = dynamic_cast<c2Creature*>(creature) ? 86 : engine.wordlist.size();
+	if (word < 0 || static_cast<size_t>(word) >= vocabulary_size || !creature->isAlive() || creature->isAsleep())
 		return;
 
-	const std::string& text = engine.wordlist[static_cast<size_t>(word)];
+	const auto* c2 = dynamic_cast<c2Creature*>(creature);
+	const std::string text = c2 ? c2->getC2SpokenWord(word) : engine.wordlist[static_cast<size_t>(word)];
+	if (text.empty()) return;
 	Bubble::newBubble(vm->targ.get(), true, text);
 	vm->targ->speak(text);
 	routeLegacyStimulus(vm->targ.get(), LegacyStimulusRoute::heard, [](oldCreature* listener) {

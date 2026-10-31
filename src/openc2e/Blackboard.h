@@ -59,6 +59,7 @@ class Blackboard : public CompoundAgent {
 	}
 
 	void broadcast(bool audible);
+	bool deliverWordTo(Agent* recipient);
 };
 
 class BlackboardPart : public CompoundPart {

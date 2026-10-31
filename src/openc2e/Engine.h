@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+struct C2SpeechResources;
 class caosValue;
 class Backend;
 class AudioBackend;
@@ -75,6 +76,7 @@ class Engine {
 	std::unique_ptr<MainCamera> camera;
 
 	std::vector<std::string> wordlist;
+	std::shared_ptr<const C2SpeechResources> c2_speech_resources;
 	std::string translateWordlistWord(const std::string& s);
 	class peFile* getExeFile() {
 		return exefile;

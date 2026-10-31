@@ -5,6 +5,47 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
     return()
 endif()
 
+# Worktrees and submodules use a .git file pointing at their metadata.
+# Let Git resolve it rather than treating that file as a directory.
+if(NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" rev-parse --short=8 HEAD
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            RESULT_VARIABLE git_rev_result
+            OUTPUT_VARIABLE git_short_rev
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(git_rev_result EQUAL 0)
+            execute_process(
+                COMMAND "${GIT_EXECUTABLE}" symbolic-ref -q HEAD
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                OUTPUT_VARIABLE git_branch_ref
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+            )
+            foreach(git_metadata HEAD packed-refs ${git_branch_ref})
+                execute_process(
+                    COMMAND "${GIT_EXECUTABLE}" rev-parse --git-path "${git_metadata}"
+                    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                    OUTPUT_VARIABLE git_metadata_path
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                )
+                get_filename_component(git_metadata_path "${git_metadata_path}" ABSOLUTE
+                    BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+                set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+                    "${git_metadata_path}")
+            endforeach()
+            set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+                "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+            return()
+        endif()
+    endif()
+    message(WARNING "Couldn't parse Git rev from .git file")
+    set(git_short_rev "unknown")
+    return()
+endif()
+
 # set up so CMake re-runs if .git changes
 set_property(
 	DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS

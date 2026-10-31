@@ -18,6 +18,7 @@
  */
 
 #include "Engine.h"
+#include "fileformats/C2SpeechResources.h"
 
 #include "Bubble.h"
 #include "Camera.h"
@@ -243,6 +244,7 @@ void Engine::loadGameData() {
 	}
 
 	// load word list for C2
+	c2_speech_resources.reset();
 	if (gametype == "c2") {
 		fs::path exepath(findMainDirectoryFile("Creatures2.exe"));
 		if (fs::exists(exepath) && !fs::is_directory(exepath)) {
@@ -255,6 +257,12 @@ void Engine::loadGameData() {
 			fmt::print("Warning: Couldn't load word list (couldn't find Creatures2.exe)!\n");
 
 		if (exefile) {
+			try {
+				FileReader speech(findMainDirectoryFile("Creatures2.exe"));
+				c2_speech_resources = std::make_shared<C2SpeechResources>(readC2SpeechResources(speech.read_to_end()));
+			} catch (const Exception& e) {
+				fmt::print("Warning: C2 speech assets unavailable: {}\n", e.what());
+			}
 			auto english_wordlist = read_wordlist(exefile, PE_LANGUAGE_ENGLISH);
 
 			wordlist.clear();

@@ -27,6 +27,8 @@
 #include <memory>
 #include <unordered_map>
 
+struct C2SpeechResources;
+
 namespace sfc {
 struct COrganV2;
 struct CBiochemistryV2;
@@ -261,6 +263,11 @@ class c2Creature : public oldCreature {
 	unsigned char fertility_output = 0, life_state_signal = 0;
 	unsigned char retained_asleep_state = 0;
 	std::deque<std::shared_ptr<sfc::CInstinctV1>> restored_instincts;
+	struct C2Word {
+		std::string input, output;
+		uint32_t strength = 0;
+	};
+	std::array<C2Word, 86> vocabulary;
 
 	void addGene(gene*);
 	void tickBiochemistry();
@@ -268,10 +275,18 @@ class c2Creature : public oldCreature {
 	void updateFertilitySignal();
 
   public:
-	c2Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a);
+	c2Creature(std::shared_ptr<genomeFile> g, bool is_female, unsigned char _variant, CreatureAgent* a, bool initialize_language = true);
+	void initializeC2Language(const C2SpeechResources&, uint32_t& random_state);
 	void restoreC2Biochemistry(const sfc::CBiochemistryV2&, uint32_t biotick);
 	void updateC2Biochemistry(sfc::CBiochemistryV2&) const;
 	uint32_t getBiochemistryTicks() const { return biochemticks; }
+	void restoreC2Language(const sfc::CreatureV2&);
+	void updateC2Language(sfc::CreatureV2&) const;
+	std::string getC2SpokenWord(int word) const;
+	bool learnC2Word(int word, const std::string& input,
+		const std::vector<std::pair<std::string, std::string>>& pronunciation_rules);
+	bool reinforceC2Word(int word, const std::string& input,
+		const std::vector<std::pair<std::string, std::string>>& pronunciation_rules);
 	void restoreC2Physiology(const sfc::CreatureV2&);
 	void updateC2Physiology(sfc::CreatureV2&) const;
 	void restoreC2Instincts(const sfc::CreatureV2&);

@@ -12,6 +12,8 @@
 #include "fileformats/genomeFile.h"
 #include "fileformats/sfc/C2SFCFile.h"
 #include "fileformats/sfc/C2CreatureData.h"
+#include "fileformats/C2SpeechResources.h"
+#include "openc2e/Blackboard.h"
 #include "fileformats/MFCWriter.h"
 #include "fileformats/s16Image.h"
 #include "common/creaturesImage.h"
@@ -151,6 +153,10 @@ int main(int argc, char** argv) {
 		initialized = true;
 		if (engine.gametype != "c2")
 			throw Exception("The data directory must contain Creatures 2");
+		FileReader speech_executable(findMainDirectoryFile("Creatures2.exe"));
+		const auto speech_assets = readC2SpeechResources(speech_executable.read_to_end());
+		fmt::print("C2 speech assets checked: {} babble variants, {} pronunciation rules\n",
+			speech_assets.babble.size(), speech_assets.pronunciation_rules.size());
 		const auto world_archive_path = findMainDirectoryFile("World.sfc");
 		if (world_archive_path.empty())
 			throw Exception("Could not locate the installed C2 World.sfc archive");
@@ -606,6 +612,70 @@ outv mins)");
 		}
 		if (!found_speech_bubble)
 			throw Exception("C2 SAY$ did not create the requested speech bubble");
+		if (creature->getC2SpokenWord(58).empty()) throw Exception("C2 newborn has no babble vocabulary");
+		sfc::CreatureV2 unknown_language;
+		creature->updateC2Language(unknown_language);
+		unknown_language.vocabulary[58] = {};
+		creature->restoreC2Language(unknown_language);
+		const auto unknown_word_agents = world.agents.size();
+		(void)run_c2_agent_script("targ ownr say# 58");
+		if (world.agents.size() != unknown_word_agents)
+			throw Exception("C2 SAY# taught a newborn an unknown global word");
+		sfc::CreatureV2 teaching_fixture;
+		creature->updateC2Language(teaching_fixture);
+		teaching_fixture.vocabulary[58] = {"old", "goo", 0};
+		creature->restoreC2Language(teaching_fixture);
+		if (!creature->learnC2Word(58, "phone", speech_assets.pronunciation_rules) ||
+			!creature->learnC2Word(58, "phone", speech_assets.pronunciation_rules) || creature->getC2SpokenWord(58) != "fone" ||
+			!creature->learnC2Word(58, "phone", speech_assets.pronunciation_rules) || creature->getC2SpokenWord(58) != "phone")
+			throw Exception("C2 teaching did not use the installed pronunciation rules");
+		auto board_entry = std::find_if(world.agents.begin(), world.agents.end(), [](const auto& a) {
+			return a && dynamic_cast<Blackboard*>(a.get());
+		});
+		if (board_entry == world.agents.end()) throw Exception("C2 world has no teaching board");
+		auto* board = dynamic_cast<Blackboard*>(board_entry->get());
+		const auto board_var0 = board->var[0];
+		const bool board_paused = board->paused; board->paused = true;
+		const float board_x = board->x, board_y = board->y;
+		board->addBlackboardString(47, 58, "phone"); board->var[0].setInt(47);
+		teaching_fixture.vocabulary[58] = {"old", "goo", 0};
+		creature->restoreC2Language(teaching_fixture);
+		board->moveTo(-100000, -100000);
+		board->broadcast(false);
+		if (creature->getC2SpokenWord(58) != "goo") throw Exception("Invisible C2 board taught a word");
+		board->moveTo(newborn->x + (newborn->getWidth()-board->getWidth())/2.0f,
+			newborn->y + (newborn->getHeight()-board->getHeight())/2.0f);
+		// Native delivery reads the source board again after the event waits.
+		auto switched_language = teaching_fixture;
+		switched_language.vocabulary[59] = {"old", "goo", 0};
+		creature->restoreC2Language(switched_language);
+		board->broadcast(false);
+		board->addBlackboardString(46, 59, "ball"); board->var[0].setInt(46);
+		world.tick();
+		if (creature->getC2SpokenWord(58) != "goo" || creature->getC2SpokenWord(59) != "gaga")
+			throw Exception("C2 teaching message did not resolve the board's word at delivery");
+		board->var[0].setInt(47); creature->restoreC2Language(teaching_fixture);
+		creature->setAsleep(true); board->broadcast(false); world.tick(); creature->setAsleep(false);
+		if (creature->getC2SpokenWord(58) != "goo") throw Exception("Sleeping C2 creature learned from a board");
+		board->broadcast(false); board->broadcast(false);
+		if (creature->getC2SpokenWord(58) != "goo") throw Exception("C2 board taught synchronously instead of queuing");
+		world.tick();
+		if (creature->getC2SpokenWord(58) != "fone") throw Exception("Visible C2 board did not teach partial pronunciation");
+		board->broadcast(false); world.tick();
+		if (creature->getC2SpokenWord(58) != "phone") throw Exception("Visible C2 board did not teach full pronunciation");
+		creature->restoreC2Language(teaching_fixture);
+		board->broadcast(true); board->broadcast(true); world.tick();
+		if (creature->getC2SpokenWord(58) != "fone") throw Exception("Audible C2 board did not teach partial pronunciation");
+		board->broadcast(true); world.tick();
+		if (creature->getC2SpokenWord(58) != "phone") throw Exception("Audible C2 board did not teach full pronunciation");
+		board->moveTo(board_x, board_y); board->var[0] = board_var0; board->paused = board_paused;
+		// Supply learned state as a saved creature would carry it. This is
+		// a speech regression fixture, not a substitute for language learning.
+		sfc::CreatureV2 learned_language;
+		creature->updateC2Language(learned_language);
+		for (size_t word = 56; word <= 72; ++word)
+			learned_language.vocabulary[word] = {engine.wordlist.at(word), "learned" + std::to_string(word), 0};
+		creature->restoreC2Language(learned_language);
 		unsigned int most_pressing_drive = 0;
 		for (unsigned int drive = 1; drive < 17; ++drive) {
 			if (creature->getDrive(drive) > creature->getDrive(most_pressing_drive))
@@ -617,21 +687,21 @@ outv mins)");
 		size_t matching_need_bubbles_before = 0;
 		for (const auto& candidate : world.agents) {
 			auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
-			if (bubble && bubble->getText() == engine.wordlist[expected_need_word])
+			if (bubble && bubble->getText() == creature->getC2SpokenWord(expected_need_word))
 				++matching_need_bubbles_before;
 		}
 		(void)run_c2_agent_script("targ ownr sayn");
 		size_t matching_need_bubbles_after = 0;
 		for (const auto& candidate : world.agents) {
 			auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
-			if (bubble && bubble->getText() == engine.wordlist[expected_need_word])
+			if (bubble && bubble->getText() == creature->getC2SpokenWord(expected_need_word))
 				++matching_need_bubbles_after;
 		}
 		if (matching_need_bubbles_after <= matching_need_bubbles_before)
 			throw Exception("C2 SAYN did not speak the word matching its strongest drive");
 		if (engine.wordlist.size() <= 58)
 			throw Exception("C2 executable word list is missing word 58");
-		const std::string signalled_word = engine.wordlist[58];
+		const std::string signalled_word = creature->getC2SpokenWord(58);
 		size_t signalled_word_bubbles_before = 0;
 		for (const auto& candidate : world.agents) {
 			auto* bubble = candidate ? dynamic_cast<Bubble*>(candidate.get()) : nullptr;
@@ -646,7 +716,7 @@ outv mins)");
 				++signalled_word_bubbles_after;
 		}
 		if (signalled_word_bubbles_after <= signalled_word_bubbles_before)
-			throw Exception("C2 SAY# did not speak its built-in word");
+			throw Exception("C2 SAY# did not speak its learned pronunciation");
 		auto touch_target = std::find_if(world.agents.begin(), world.agents.end(), [&](const std::shared_ptr<Agent>& candidate) {
 			return candidate && candidate.get() != newborn.get() && !dynamic_cast<CreatureAgent*>(candidate.get()) &&
 				!dynamic_cast<Bubble*>(candidate.get()) && candidate->findScript(1);

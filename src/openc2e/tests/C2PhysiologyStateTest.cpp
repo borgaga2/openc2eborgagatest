@@ -1,4 +1,5 @@
 #include "openc2e/creatures/oldCreature.h"
+#include "fileformats/C2SpeechResources.h"
 #include "openc2e/creatures/CreatureAgent.h"
 #include "common/io/SpanReader.h"
 #include "common/io/VectorWriter.h"
@@ -187,4 +188,94 @@ TEST(C2PhysiologyState, FertilityEmissionUsesTheOriginalC2Hysteresis) {
 	EXPECT_EQ(*output, 0);
 	EXPECT_EQ(*creature.getLocusPointer(true, 1, 2, 2), 127);
 	EXPECT_EQ(*creature.getLocusPointer(true, 1, 2, 3), 127);
+}
+
+TEST(C2PhysiologyState, RestoresIndividualVocabularyWithoutTeachingUnknownWords) {
+	PhysiologyTestAgent agent;
+	TestCreature creature(make_genome(), true, 0, &agent);
+	EXPECT_TRUE(creature.getC2SpokenWord(0).empty());
+	EXPECT_TRUE(creature.getC2SpokenWord(85).empty());
+	sfc::CreatureV2 saved;
+	for (size_t i = 0; i < saved.vocabulary.size(); ++i) {
+		saved.vocabulary[i] = {"input" + std::to_string(i), "output" + std::to_string(i), uint32_t(0x3f000000u + i)};
+	}
+	saved.vocabulary[12] = {"food", "foo", 0};
+	saved.vocabulary[13] = {"unknown", "", 0x3f800000};
+	creature.restoreC2Language(saved);
+	EXPECT_EQ(creature.getC2SpokenWord(12), "foo");
+	EXPECT_TRUE(creature.getC2SpokenWord(13).empty());
+	EXPECT_TRUE(creature.getC2SpokenWord(-1).empty());
+	EXPECT_TRUE(creature.getC2SpokenWord(86).empty());
+	sfc::CreatureV2 captured;
+	creature.updateC2Language(captured);
+	for (size_t i = 0; i < saved.vocabulary.size(); ++i) {
+		EXPECT_EQ(captured.vocabulary[i].in, saved.vocabulary[i].in);
+		EXPECT_EQ(captured.vocabulary[i].out, saved.vocabulary[i].out);
+		EXPECT_EQ(captured.vocabulary[i].strength, saved.vocabulary[i].strength);
+	}
+	EXPECT_EQ(agent.born_calls + agent.age_calls + agent.death_calls, 0u);
+}
+
+TEST(C2PhysiologyState, ReinforcesExistingWordGraduallyUsingOrderedPronunciationRules) {
+	PhysiologyTestAgent agent;
+	TestCreature creature(make_genome(), true, 0, &agent);
+	sfc::CreatureV2 saved;
+	saved.vocabulary[12] = {"thith", "babble", 0};
+	creature.restoreC2Language(saved);
+	const std::vector<std::pair<std::string, std::string>> rules{{"th", "d"}, {"i", "ee"}};
+	EXPECT_FALSE(creature.reinforceC2Word(-1, "thith", rules));
+	EXPECT_FALSE(creature.reinforceC2Word(12, "other", rules));
+	EXPECT_EQ(creature.getC2SpokenWord(12), "babble");
+	ASSERT_TRUE(creature.reinforceC2Word(12, "THITH", rules));
+	EXPECT_EQ(creature.getC2SpokenWord(12), "babble"); // strength 60
+	ASSERT_TRUE(creature.reinforceC2Word(12, "thith", rules));
+	EXPECT_EQ(creature.getC2SpokenWord(12), "dith"); // strength 120
+	ASSERT_TRUE(creature.reinforceC2Word(12, "thith", rules));
+	EXPECT_EQ(creature.getC2SpokenWord(12), "thith"); // strength 180
+	for (int i = 0; i < 5; ++i) creature.reinforceC2Word(12, "thith", rules);
+	creature.updateC2Language(saved);
+	EXPECT_EQ(saved.vocabulary[12].strength, 255u);
+}
+
+TEST(C2PhysiologyState, NewAssociationMatchesOriginalPronunciationObservations) {
+	PhysiologyTestAgent agent;
+	TestCreature creature(make_genome(), true, 0, &agent);
+	for (const auto& pair : std::vector<std::pair<std::string, std::string>>{
+		{"food", "gogo"}, {"apple", "gpgp"}, {"push", "gugu"},
+		{"computer", "gogo"}, {"ball", "gaga"}, {"eat", "gat"}}) {
+		sfc::CreatureV2 saved;
+		saved.vocabulary[12] = {"old", "goo", 60};
+		creature.restoreC2Language(saved);
+		ASSERT_TRUE(creature.learnC2Word(12, pair.first, {}));
+		EXPECT_EQ(creature.getC2SpokenWord(12), "goo"); // competing word weakens old association
+		ASSERT_TRUE(creature.learnC2Word(12, pair.first, {}));
+		EXPECT_EQ(creature.getC2SpokenWord(12), pair.second);
+		creature.updateC2Language(saved);
+		EXPECT_EQ(saved.vocabulary[12].in, pair.first);
+		EXPECT_EQ(saved.vocabulary[12].strength, 60u);
+	}
+	EXPECT_FALSE(creature.learnC2Word(12, "", {}));
+	EXPECT_FALSE(creature.learnC2Word(86, "food", {}));
+	EXPECT_FALSE(creature.learnC2Word(12, std::string(25, 'a'), {}));
+}
+
+TEST(C2PhysiologyState, InitializesBabbleCategoriesAndLeavesReservedWordsEmpty) {
+	PhysiologyTestAgent agent;
+	TestCreature creature(make_genome(), true, 0, &agent);
+	C2SpeechResources resources;
+	for (auto& row : resources.babble) for (unsigned field=0;field<6;++field) row[field]="babble"+std::to_string(field);
+	uint32_t seed=0;
+	creature.initializeC2Language(resources,seed);
+	EXPECT_EQ(seed,1456702548u); // verified native final state after 164 draws
+	sfc::CreatureV2 saved; creature.updateC2Language(saved);
+	EXPECT_EQ(saved.vocabulary[0].out,"babble0");
+	EXPECT_EQ(saved.vocabulary[16].out,"babble5");
+	EXPECT_EQ(saved.vocabulary[17].out,"babble1");
+	EXPECT_EQ(saved.vocabulary[56].out,"babble2");
+	EXPECT_EQ(saved.vocabulary[73].out,"babble3");
+	EXPECT_EQ(saved.vocabulary[78].out,"babble4");
+	for (unsigned i : {77u,82u,83u,84u,85u}) EXPECT_TRUE(saved.vocabulary[i].out.empty());
+	for (const auto& word : saved.vocabulary) if (!word.out.empty()) {
+		EXPECT_EQ(word.in,word.out); EXPECT_GE(word.strength,30u); EXPECT_LE(word.strength,50u);
+	}
 }

@@ -17,6 +17,7 @@
  *
  */
 
+#include "Blackboard.h"
 #include "Agent.h"
 
 #include "AgentHelpers.h"
@@ -258,6 +259,13 @@ bool Agent::fireScript(unsigned short event, Agent* from, caosValue one, caosVal
 	if (dying)
 		return false;
 
+	// C2 message 7 is native vocabulary delivery, not a CAOS script.
+	// Resolve the source and its current word at dispatch time, preserving
+	// the recipient's running VM and checking sleep/death at delivery.
+	if (engine.version == 2 && event == 7 && dynamic_cast<CreatureAgent*>(this)) {
+		auto* board = dynamic_cast<Blackboard*>(from);
+		return board && board->deliverWordTo(this);
+	}
 	CreatureAgent* c = 0;
 	if (event <= 3 || event == 4 || event == 12 || event == 13 || event == 14)
 		c = dynamic_cast<CreatureAgent*>(from);
@@ -404,6 +412,11 @@ bool Agent::queueScript(unsigned short event, AgentRef from, caosValue p0, caosV
 
 	if (dying)
 		return false;
+
+	if (engine.version == 2 && event == 7 && dynamic_cast<CreatureAgent*>(this)) {
+		world.queueScript(event, this, from, p0, p1);
+		return true;
+	}
 
 	// only bother firing the event if either it exists, or it's one with engine code attached
 	// TODO: why don't we do the engine checks/etc here?

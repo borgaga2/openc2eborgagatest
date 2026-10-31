@@ -18,6 +18,7 @@
  */
 
 #include "Agent.h"
+#include "Engine.h"
 #include "Map.h"
 #include "MetaRoom.h"
 #include "Room.h"
@@ -56,7 +57,7 @@ bool agentIsVisible(Agent* seeing, Agent* a, float ownerx, float ownery, MetaRoo
 	unsigned int dummydir;
 	std::shared_ptr<Room> newroom = ownerroom;
 	Point where = src;
-	bool collision = world.map->collideLineWithRoomSystem(src, dest, newroom, where, dummywall, dummydir, seeing->perm);
+	bool collision = world.map->collideLineWithRoomSystem(src, dest, newroom, where, dummywall, dummydir, engine.version == 2 ? seeing->size : seeing->perm);
 	if (collision && where != dest)
 		return false;
 
