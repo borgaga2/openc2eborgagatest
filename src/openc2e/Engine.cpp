@@ -584,19 +584,22 @@ void Engine::handleTextInput(BackendEvent& event) {
 	std::string cp1252_text;
 	try {
 		cp1252_text = utf8_to_cp1252(event.text);
-	} catch (std::domain_error& e) {
-		// ignore, will be printed next
-	}
-	if (cp1252_text.size() != 1) {
+	} catch (const std::domain_error&) {
 		fmt::print(stderr, "bad text input: ");
 		for (unsigned char c : event.text) {
 			fmt::print(stderr, "0x{:02x} ", c);
 		}
 		fmt::print(stderr, "\n");
+		return;
 	}
 
-	int translated_char = cp1252_text[0];
+	// A backend event can contain several characters (for example an IME
+	// commit). Empty or unrepresentable input must not synthesize a NUL key.
+	for (unsigned char c : cp1252_text)
+		handleTranslatedChar(c);
+}
 
+void Engine::handleTranslatedChar(unsigned char translated_char) {
 	if (cp1252_isprint(translated_char)) {
 		if (version < 3 && !world.focusagent) {
 			Bubble::newBubble(world.hand(), false, std::string());

@@ -405,6 +405,7 @@ add_executable(test_openc2e
 	src/openc2e/tests/C2SkeletonStateTest.cpp
 	src/openc2e/tests/C2HearingTest.cpp
 	src/openc2e/tests/C2LanguageTest.cpp
+	src/openc2e/tests/EngineTextInputTest.cpp
 	src/openc2e/tests/C2InstinctTest.cpp
 )
 target_include_directories(test_openc2e PRIVATE src/openc2e)

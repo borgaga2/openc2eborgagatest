@@ -59,6 +59,7 @@ class Engine {
 	void handleMouseMove(BackendEvent& event);
 	void handleMouseButton(BackendEvent& event);
 	void handleTextInput(BackendEvent& event);
+	void handleTranslatedChar(unsigned char c);
 	void handleRawKeyDown(BackendEvent& event);
 	void handleRawKeyUp(BackendEvent& event);
 
