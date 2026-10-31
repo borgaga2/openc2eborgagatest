@@ -268,6 +268,9 @@ class c2Creature : public oldCreature {
 		uint32_t strength = 0;
 	};
 	std::array<C2Word, 86> vocabulary;
+	int speech_noun = -1, speech_verb = -1;
+	uint8_t speech_strength = 0, speech_ticks = 0;
+	void applyC2SpeechCommand(int noun, int verb, unsigned noun_strength, unsigned verb_strength);
 
 	void addGene(gene*);
 	void tickBiochemistry();
@@ -283,6 +286,9 @@ class c2Creature : public oldCreature {
 	void restoreC2Language(const sfc::CreatureV2&);
 	void updateC2Language(sfc::CreatureV2&) const;
 	std::string getC2SpokenWord(int word) const;
+	int findC2Word(const std::string& text) const;
+	bool hearC2Speech(Agent* source, const std::string& text);
+	void advanceC2SpeechCommand();
 	bool learnC2Word(int word, const std::string& input,
 		const std::vector<std::pair<std::string, std::string>>& pronunciation_rules);
 	bool reinforceC2Word(int word, const std::string& input,

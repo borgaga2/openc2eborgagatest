@@ -20,6 +20,7 @@
 #include "PointerAgent.h"
 
 #include "Camera.h"
+#include "C2HearingRange.h"
 #include "DullPart.h"
 #include "Engine.h"
 #include "Map.h"
@@ -28,6 +29,7 @@
 #include "World.h"
 #include "caosVM.h"
 #include "creatures/SkeletalCreature.h"
+#include "creatures/oldCreature.h"
 
 #include <cassert>
 #include <climits>
@@ -56,6 +58,18 @@ void PointerAgent::finishInit() {
 	// TODO: this seems hard-coded in DS (pointer attr is 0)
 	attr = attr & 32;
 	floatSetup();
+}
+
+void PointerAgent::broadcastC2Speech(const std::string& text) {
+	if (engine.version != 2) return;
+	c2_speech = text;
+	if (text.empty()) return;
+	for (const auto& agent : world.agents) {
+		if (!agent) continue;
+		auto* holder = dynamic_cast<CreatureAgent*>(agent.get());
+		if (holder && dynamic_cast<c2Creature*>(holder->getCreature()) && c2CanHear(agent.get(), this))
+			agent->queueScript(6, this);
+	}
 }
 
 void PointerAgent::carry(AgentRef a) {

@@ -337,6 +337,7 @@ add_library(openc2e_core OBJECT
 	src/openc2e/creatures/C2OrganState.cpp
 	src/openc2e/creatures/C2BiochemistryState.cpp
 	src/openc2e/creatures/C2PhysiologyState.cpp
+	src/openc2e/creatures/C2Language.cpp
 	src/openc2e/parseException.cpp
 	src/openc2e/partzorder.cpp
 	src/openc2e/PathResolver.cpp
@@ -403,6 +404,7 @@ add_executable(test_openc2e
 	src/openc2e/tests/C2PhysiologyStateTest.cpp
 	src/openc2e/tests/C2SkeletonStateTest.cpp
 	src/openc2e/tests/C2HearingTest.cpp
+	src/openc2e/tests/C2LanguageTest.cpp
 	src/openc2e/tests/C2InstinctTest.cpp
 )
 target_include_directories(test_openc2e PRIVATE src/openc2e)

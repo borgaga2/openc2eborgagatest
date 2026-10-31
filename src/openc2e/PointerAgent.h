@@ -28,6 +28,7 @@ class PointerAgent : public SimpleAgent {
   private:
 	DullPart* overlay;
 	int overlayTimer;
+	std::string c2_speech;
 
   protected:
 	int hotspotx, hotspoty;
@@ -56,6 +57,8 @@ class PointerAgent : public SimpleAgent {
 	void kill();
 	void handleEvent(BackendEvent& event);
 	void setHotspot(int, int);
+	void broadcastC2Speech(const std::string& text);
+	const std::string& getC2Speech() const { return c2_speech; }
 
 	int pointerX() { return x + hotspotx; }
 	int pointerY() { return y + hotspoty; }

@@ -39,6 +39,7 @@
 #include "common/io/FileReader.h"
 #include "common/throw_ifnot.h"
 #include "creatures/CreatureAgent.h"
+#include "creatures/oldCreature.h"
 #include "fileformats/genomeFile.h"
 #include "historyManager.h"
 #include "imageManager.h"
@@ -262,7 +263,10 @@ void World::tick() {
 			if (engine.version < 3) {
 				// only try running a collision script if the agent doesn't have a running script
 				// TODO: we don't really understand how script interruption in c1/c2 works
-				if (agent->vm && !agent->vm->stopped() && i.scriptno == 6) {
+				auto* holder = dynamic_cast<CreatureAgent*>(agent.get());
+				const bool hand_speech = engine.version == 2 && i.from.get() == world.hand() &&
+					holder && dynamic_cast<c2Creature*>(holder->getCreature());
+				if (agent->vm && !agent->vm->stopped() && i.scriptno == 6 && !hand_speech) {
 					continue;
 				}
 			}

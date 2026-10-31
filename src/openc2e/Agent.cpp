@@ -253,12 +253,20 @@ std::shared_ptr<script> Agent::findScript(unsigned short event) {
 #include "PointerAgent.h"
 #include "creatures/Creature.h"
 #include "creatures/CreatureAgent.h"
+#include "creatures/oldCreature.h"
 bool Agent::fireScript(unsigned short event, Agent* from, caosValue one, caosValue two) {
 	// Start running the specified script on the VM of this agent, with FROM set to the provided agent.
 
 	if (dying)
 		return false;
 
+	if (engine.version == 2 && event == 6) {
+		auto* holder = dynamic_cast<CreatureAgent*>(this);
+		auto* creature = holder ? dynamic_cast<c2Creature*>(holder->getCreature()) : nullptr;
+		auto* pointer = dynamic_cast<PointerAgent*>(from);
+		if (creature && pointer)
+			return creature->hearC2Speech(pointer, pointer->getC2Speech());
+	}
 	// C2 message 7 is native vocabulary delivery, not a CAOS script.
 	// Resolve the source and its current word at dispatch time, preserving
 	// the recipient's running VM and checking sleep/death at delivery.
@@ -413,7 +421,7 @@ bool Agent::queueScript(unsigned short event, AgentRef from, caosValue p0, caosV
 	if (dying)
 		return false;
 
-	if (engine.version == 2 && event == 7 && dynamic_cast<CreatureAgent*>(this)) {
+	if (engine.version == 2 && (event == 6 || event == 7) && dynamic_cast<CreatureAgent*>(this)) {
 		world.queueScript(event, this, from, p0, p1);
 		return true;
 	}

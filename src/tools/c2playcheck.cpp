@@ -18,6 +18,7 @@
 #include "fileformats/s16Image.h"
 #include "common/creaturesImage.h"
 #include "common/backend/Backend.h"
+#include "common/backend/Keycodes.h"
 #include "openc2e/Engine.h"
 #include "openc2e/Map.h"
 #include "openc2e/PointerAgent.h"
@@ -669,6 +670,38 @@ outv mins)");
 		board->broadcast(true); world.tick();
 		if (creature->getC2SpokenWord(58) != "phone") throw Exception("Audible C2 board did not teach full pronunciation");
 		board->moveTo(board_x, board_y); board->var[0] = board_var0; board->paused = board_paused;
+		// Submit through the same editable bubble and Return handler as a
+		// player. Keep a running VM: native speech must not be dropped by the
+		// legacy collision-message filter or interrupt the creature's script.
+		auto hand_language = teaching_fixture;
+		hand_language.vocabulary[0] = {"push", "puh", 100};
+		hand_language.vocabulary[1] = {"pull", "pul", 255};
+		creature->restoreC2Language(hand_language);
+		const bool norn_paused = newborn->paused; newborn->paused = true;
+		const float hand_x = world.hand()->x, hand_y = world.hand()->y;
+		world.hand()->moveTo(newborn->x, newborn->y);
+		caosScript busy("c2", "<C2 hand speech busy fixture>");
+		busy.parse("wait 1000");
+		if (!newborn->vm) newborn->vm = world.getVM(newborn.get());
+		newborn->vm->fireScript(busy.installer, false, world.hand()); newborn->vm->tick();
+		auto* running_vm = newborn->vm;
+		auto* verbs = creature->getBrain()->getLobeByTissue(3);
+		if (!verbs || verbs->getNoNeurons() < 2) throw Exception("C2 creature has no verb cells");
+		verbs->getNeuron(0)->state = 0; verbs->getNeuron(1)->state = 0;
+		auto* typed = Bubble::newBubble(world.hand(), false, "push");
+		typed->part(1)->handleRawKey(OPENC2E_KEY_RETURN);
+		if (verbs->getNeuron(0)->state) throw Exception("C2 hand speech delivered synchronously");
+		world.tick();
+		if (verbs->getNeuron(0)->state != 70 || newborn->vm != running_vm || newborn->vmStopped())
+			throw Exception("C2 typed speech did not reach a busy creature without interrupting it");
+		world.hand()->broadcastC2Speech("push");
+		world.hand()->broadcastC2Speech("pull");
+		verbs->getNeuron(0)->state = 0;
+		world.tick();
+		if (verbs->getNeuron(0)->state || verbs->getNeuron(1)->state != 255)
+			throw Exception("C2 speech did not resolve the hand's current words at delivery");
+		newborn->stopScript(); newborn->paused = norn_paused;
+		world.hand()->moveTo(hand_x,hand_y);
 		// Supply learned state as a saved creature would carry it. This is
 		// a speech regression fixture, not a substitute for language learning.
 		sfc::CreatureV2 learned_language;

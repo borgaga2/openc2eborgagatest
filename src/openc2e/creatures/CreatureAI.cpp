@@ -108,6 +108,8 @@ void oldCreature::tickBrain() {
 	AgentRef oldattn = attention;
 	int olddecn = decn;
 
+	if (auto* c2 = dynamic_cast<c2Creature*>(this))
+		c2->advanceC2SpeechCommand();
 	brain->tick();
 	// C1/C2 reserve lobe 6 for decisions and lobe 7 for attention.
 	decn = brain->lobes.size() > 6 ? brain->lobes[6]->getWinnerNeuron() : -1;

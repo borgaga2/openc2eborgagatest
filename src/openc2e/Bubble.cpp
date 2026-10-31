@@ -18,6 +18,7 @@
  */
 
 #include "Bubble.h"
+#include "PointerAgent.h"
 
 #include "Camera.h"
 #include "Engine.h"
@@ -75,8 +76,10 @@ void Bubble::tick() {
 
 void Bubble::turnIntoSpeech() {
 	newBubble((Agent*)world.hand(), true, getText());
+	if (engine.version == 2 && world.hand())
+		world.hand()->broadcastC2Speech(getText());
 
-	// TODO: announce via shou
+	// TODO: C1 speech delivery
 	// TODO: add to speech history
 
 	kill();
