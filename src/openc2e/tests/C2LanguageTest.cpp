@@ -5,9 +5,11 @@
 #include "fileformats/C2SpeechResources.h"
 #include "openc2e/Engine.h"
 #include "common/io/SpanReader.h"
+#include "common/encoding.h"
 #include <gtest/gtest.h>
 
 namespace {
+#include "C2ActionSpeechCases.h"
 class SpeechAgent : public Agent, public CreatureAgent {
   public:
 	SpeechAgent() : Agent(4, 1, 1, 0) {}
@@ -60,6 +62,10 @@ TEST(C2Language, RecognizesOwnInputAndOutputBeforeLaterEntriesWithoutAConfidence
 	EXPECT_EQ(c.findC2Word(""),2);
 	EXPECT_EQ(c.findC2Word("push!"),-1);
 	EXPECT_EQ(c.findC2Word("push\tfood"),-1);
+	EXPECT_EQ(c.getC2WordInput(0),"push");
+	EXPECT_EQ(c.getC2SpokenWord(0),"puh");
+	EXPECT_TRUE(c.getC2WordInput(-1).empty());
+	EXPECT_TRUE(c.getC2WordInput(86).empty());
 }
 
 TEST(C2Language, CommandInputsMatchOriginalParserObservations) {
@@ -131,4 +137,36 @@ TEST(C2Language, UnknownSpeechTeachesTheCurrentAttentionCategoryButNotWhileAslee
 	c.updateC2Language(learned);
 	EXPECT_EQ(learned.vocabulary[20].in,"old");
 	engine.c2_speech_resources = std::move(previous_resources);
+}
+
+TEST(C2Language, ActionResponseMatches128OriginalCodeObservations) {
+	SpeechAgent holder; SpeechCreature c(genome(),true,0,&holder,false);
+	sfc::CreatureV2 saved;
+	for (unsigned i=0;i<86;++i) saved.vocabulary[i] = {"i"+std::to_string(i),"w"+std::to_string(i),255};
+	c.restoreC2Language(saved);
+	C2SpeechResources resources;
+	// These numeric maps accompany the independent synthetic-word oracle;
+	// production reads them from the verified installed executable.
+	resources.action_words = {75,1,2,3,4,5,6,7,8,9,10,11,12,13,255,255};
+	resources.action_uses_noun = {1,1,1,1,1,1,1,1,0,1,0,0,1,1,0,0};
+	for (const auto& row : native_action_speech_cases) {
+		SCOPED_TRACE(std::to_string(row.decision)+":"+std::to_string(row.focus)+":"+std::to_string(row.seed));
+		auto seed=row.seed;
+		const auto actual=c.planC2ActionSpeech(row.decision,row.focus?5:-1,36,seed,resources);
+		EXPECT_EQ(actual.text,row.text);
+		EXPECT_EQ(actual.speak,row.speak);
+		EXPECT_EQ(actual.teaching_words,row.teaching_words);
+		EXPECT_EQ(seed,row.final_seed);
+	}
+}
+
+TEST(C2Language, ActionPhraseLimitCountsOriginalEncodingBytesWithoutBreakingUtf8) {
+	SpeechAgent holder; SpeechCreature c(genome(),true,0,&holder,false);
+	auto saved=words(); const auto name=cp1252_to_utf8(std::string(24,'\xe9'));
+	saved.vocabulary[16] = {name,name,255}; c.restoreC2Language(saved);
+	C2SpeechResources resources; resources.action_words.fill(255); resources.action_words[1]=1;
+	uint32_t seed=0;
+	const auto actual=c.planC2ActionSpeech(1,-1,36,seed,resources);
+	EXPECT_EQ(actual.text,name); EXPECT_TRUE(actual.speak);
+	EXPECT_EQ(actual.teaching_words,(std::vector<int>{52,1}));
 }

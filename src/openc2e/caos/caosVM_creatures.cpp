@@ -2011,14 +2011,17 @@ void c_SAY_WORD(caosVM* vm) {
 	if (word < 0 || static_cast<size_t>(word) >= vocabulary_size || !creature->isAlive() || creature->isAsleep())
 		return;
 
-	const auto* c2 = dynamic_cast<c2Creature*>(creature);
+	auto* c2 = dynamic_cast<c2Creature*>(creature);
+	if (c2) c2->broadcastC2Word(word);
 	const std::string text = c2 ? c2->getC2SpokenWord(word) : engine.wordlist[static_cast<size_t>(word)];
 	if (text.empty()) return;
 	Bubble::newBubble(vm->targ.get(), true, text);
 	vm->targ->speak(text);
-	routeLegacyStimulus(vm->targ.get(), LegacyStimulusRoute::heard, [](oldCreature* listener) {
-		listener->handleStimulus(11); // Heard creature speak.
-	});
+	if (!c2) {
+		routeLegacyStimulus(vm->targ.get(), LegacyStimulusRoute::heard, [](oldCreature* listener) {
+			listener->handleStimulus(11); // Heard creature speak.
+		});
+	}
 	routeC2EStimulus(vm->targ.get(), LegacyStimulusRoute::heard, [](c2eCreature* listener) {
 		listener->handleStimulus(11, 1.0f); // Heard creature speak.
 	});

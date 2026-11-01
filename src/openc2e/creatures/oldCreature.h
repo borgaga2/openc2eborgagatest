@@ -271,6 +271,7 @@ class c2Creature : public oldCreature {
 	int speech_noun = -1, speech_verb = -1;
 	uint8_t speech_strength = 0, speech_ticks = 0;
 	void applyC2SpeechCommand(int noun, int verb, unsigned noun_strength, unsigned verb_strength);
+	void showC2Speech(const std::string& text);
 
 	void addGene(gene*);
 	void tickBiochemistry();
@@ -286,6 +287,17 @@ class c2Creature : public oldCreature {
 	void restoreC2Language(const sfc::CreatureV2&);
 	void updateC2Language(sfc::CreatureV2&) const;
 	std::string getC2SpokenWord(int word) const;
+	std::string getC2WordInput(int word) const;
+	void broadcastC2Word(int word, bool teaching = false);
+	bool receiveC2Word(Agent* source, int word, const std::string& text);
+	struct C2ActionSpeech {
+		std::string text;
+		std::vector<int> teaching_words;
+		bool speak = false;
+	};
+	C2ActionSpeech planC2ActionSpeech(int decision, int focus_category, int speaker_category,
+		uint32_t& random_state, const C2SpeechResources&) const;
+	void sayC2Action();
 	int findC2Word(const std::string& text) const;
 	bool hearC2Speech(Agent* source, const std::string& text);
 	void advanceC2SpeechCommand();

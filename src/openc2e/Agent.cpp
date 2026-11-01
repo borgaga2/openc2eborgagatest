@@ -266,13 +266,22 @@ bool Agent::fireScript(unsigned short event, Agent* from, caosValue one, caosVal
 		auto* pointer = dynamic_cast<PointerAgent*>(from);
 		if (creature && pointer)
 			return creature->hearC2Speech(pointer, pointer->getC2Speech());
+		auto* sender = dynamic_cast<CreatureAgent*>(from);
+		auto* speaker = sender ? dynamic_cast<c2Creature*>(sender->getCreature()) : nullptr;
+		if (creature && speaker)
+			return one.hasInt() && creature->hearC2Speech(from, speaker->getC2WordInput(one.getInt()));
 	}
 	// C2 message 7 is native vocabulary delivery, not a CAOS script.
 	// Resolve the source and its current word at dispatch time, preserving
 	// the recipient's running VM and checking sleep/death at delivery.
 	if (engine.version == 2 && event == 7 && dynamic_cast<CreatureAgent*>(this)) {
 		auto* board = dynamic_cast<Blackboard*>(from);
-		return board && board->deliverWordTo(this);
+		if (board) return board->deliverWordTo(this);
+		auto* sender = dynamic_cast<CreatureAgent*>(from);
+		auto* speaker = sender ? dynamic_cast<c2Creature*>(sender->getCreature()) : nullptr;
+		auto* recipient = dynamic_cast<c2Creature*>(dynamic_cast<CreatureAgent*>(this)->getCreature());
+		return speaker && recipient && one.hasInt() &&
+			recipient->receiveC2Word(from, one.getInt(), speaker->getC2WordInput(one.getInt()));
 	}
 	CreatureAgent* c = 0;
 	if (event <= 3 || event == 4 || event == 12 || event == 13 || event == 14)

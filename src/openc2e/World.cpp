@@ -260,13 +260,16 @@ void World::tick() {
 	for (auto& i : scriptqueue) {
 		std::shared_ptr<Agent> agent = i.agent.lock();
 		if (agent) {
-			if (engine.version < 3) {
+			if (engine.version < 3 && i.scriptno == 6 && agent->vm && !agent->vm->stopped()) {
 				// only try running a collision script if the agent doesn't have a running script
+				// Native C2 speech also uses message 6; it preserves the running VM.
 				// TODO: we don't really understand how script interruption in c1/c2 works
 				auto* holder = dynamic_cast<CreatureAgent*>(agent.get());
-				const bool hand_speech = engine.version == 2 && i.from.get() == world.hand() &&
-					holder && dynamic_cast<c2Creature*>(holder->getCreature());
-				if (agent->vm && !agent->vm->stopped() && i.scriptno == 6 && !hand_speech) {
+				auto* sender = dynamic_cast<CreatureAgent*>(i.from.get());
+				const bool native_speech = engine.version == 2 && holder &&
+					dynamic_cast<c2Creature*>(holder->getCreature()) &&
+					(i.from.get() == world.hand() || (sender && dynamic_cast<c2Creature*>(sender->getCreature())));
+				if (!native_speech) {
 					continue;
 				}
 			}

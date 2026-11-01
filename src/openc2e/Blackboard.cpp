@@ -153,7 +153,7 @@ bool Blackboard::deliverWordTo(Agent* recipient) {
 	if (!var[0].hasInt() || var[0].getInt() < 0 || static_cast<size_t>(var[0].getInt()) >= strings.size()) return false;
 	const auto& [word,text] = strings[var[0].getInt()];
 	if (word >= 86 || text.empty()) return false;
-	return creature->learnC2Word(word,text,engine.c2_speech_resources->pronunciation_rules);
+	return creature->receiveC2Word(this,word,text);
 }
 
 BlackboardPart::BlackboardPart(Blackboard* p, unsigned int _id)

@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <array>
+
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -45,6 +46,12 @@
 #include <memory>
 #include <optional>
 #include <string>
+
+class C2SpeechCheckCreature : public c2Creature {
+  public:
+	using c2Creature::c2Creature;
+	void setDecisionForCheck(int decision) { decn = decision; }
+};
 
 static int32_t monikerToken(const std::string& moniker) {
 	if (moniker.size() != 4)
@@ -885,7 +892,7 @@ outv mins)");
 			auto parent_copy = clone_genome(source);
 			auto* skeletal = new SkeletalCreature(4);
 			try {
-				auto* c2 = new c2Creature(parent_copy, is_female, 0, skeletal);
+				auto* c2 = new C2SpeechCheckCreature(parent_copy, is_female, 0, skeletal);
 				skeletal->setCreature(c2);
 			} catch (...) {
 				delete skeletal;
@@ -945,6 +952,67 @@ outv mins)");
 			if (!found_order_bubble)
 				throw Exception(fmt::format("C2 ORDR did not create the requested {} speech bubble", speech));
 		}
+		// Native creature speech carries the vocabulary ID and resolves the
+		// sender's INPUT association at dispatch, independently of its voice.
+		sfc::CreatureV2 male_language, female_language;
+		mate_male->updateC2Language(male_language); mate_female->updateC2Language(female_language);
+		auto sender_words=male_language, listener_words=female_language;
+		sender_words.vocabulary[0]={"push","puh",100};
+		sender_words.vocabulary[58]={"phone","wrong-pronunciation",255};
+		sender_words.vocabulary[76]={"query","sender-sound",255};
+		listener_words.vocabulary[0]={"push","squeak",100};
+		listener_words.vocabulary[1]={"pull","pul",255};
+		listener_words.vocabulary[58]={"old","goo",0};
+		listener_words.vocabulary[76]={"query","listener-sound",255};
+		mate_male->restoreC2Language(sender_words); mate_female->restoreC2Language(listener_words);
+		const bool male_paused=mate_male_ref->paused, female_paused=mate_female_ref->paused;
+		mate_male_ref->paused=mate_female_ref->paused=true;
+		caosScript peer_busy("c2","<C2 peer speech busy fixture>"); peer_busy.parse("wait 1000");
+		if (!mate_female_ref->vm) mate_female_ref->vm=world.getVM(mate_female_ref.get());
+		mate_female_ref->vm->fireScript(peer_busy.installer,false,mate_male_ref.get()); mate_female_ref->vm->tick();
+		auto* peer_vm=mate_female_ref->vm;
+		auto* listener_verbs=mate_female->getBrain()->getLobeByTissue(3);
+		if (!listener_verbs || listener_verbs->getNoNeurons()<2) throw Exception("C2 peer listener has no verb lobe");
+		listener_verbs->getNeuron(0)->state=0; female_sensory->getNeuron(0)->state=0;
+		(void)run_c2_agent_script_as(mate_male_ref,mate_female_ref,"targ ownr say# 0");
+		if (listener_verbs->getNeuron(0)->state || female_sensory->getNeuron(0)->state)
+			throw Exception("C2 peer speech was delivered synchronously");
+		world.tick();
+		if (listener_verbs->getNeuron(0)->state!=70 || female_sensory->getNeuron(0)->state!=64 ||
+			mate_female_ref->vm!=peer_vm || mate_female_ref->vmStopped())
+			throw Exception("C2 peer speech did not parse canonical input without interrupting a busy listener");
+		mate_male->broadcastC2Word(0);
+		sender_words.vocabulary[0]={"pull","other-sound",255}; mate_male->restoreC2Language(sender_words);
+		listener_verbs->getNeuron(0)->state=listener_verbs->getNeuron(1)->state=0;
+		world.tick();
+		if (listener_verbs->getNeuron(0)->state || listener_verbs->getNeuron(1)->state!=179)
+			throw Exception("C2 peer speech did not resolve the current sender association");
+		mate_male->broadcastC2Word(58,true); world.tick();
+		sfc::CreatureV2 peer_learned; mate_female->updateC2Language(peer_learned);
+		if (peer_learned.vocabulary[58].in!="phone" || peer_learned.vocabulary[58].strength!=60 ||
+			peer_learned.vocabulary[58].out=="wrong-pronunciation")
+			throw Exception("C2 peer teaching did not establish the sender's canonical word");
+		mate_female->restoreC2Language(listener_words); mate_female->setAsleep(true);
+		mate_male->broadcastC2Word(58,true); world.tick(); mate_female->setAsleep(false);
+		if (mate_female->getC2WordInput(58)!="old") throw Exception("Sleeping C2 peer learned a word");
+		auto response_words=listener_words; response_words.vocabulary[1].out="act";
+		mate_female->restoreC2Language(response_words);
+		auto* query_listener=static_cast<C2SpeechCheckCreature*>(mate_female);
+		const int previous_decision=query_listener->getDecisionId(); query_listener->setDecisionForCheck(1);
+		const auto count_action_reply = [&] {
+			return std::count_if(world.agents.begin(),world.agents.end(),[](const auto& a) {
+				auto* bubble=a?dynamic_cast<Bubble*>(a.get()):nullptr;
+				return bubble && (bubble->getText()=="act" || bubble->getText().ends_with(" act"));
+			});
+		};
+		const auto replies_before=count_action_reply();
+		mate_male->broadcastC2Word(76); world.tick();
+		if (count_action_reply()<=replies_before || mate_female_ref->vm!=peer_vm || mate_female_ref->vmStopped())
+			throw Exception("C2 learned action question did not produce a reply while preserving the listener VM");
+		query_listener->setDecisionForCheck(previous_decision);
+		mate_female_ref->stopScript();
+		mate_male_ref->paused=male_paused; mate_female_ref->paused=female_paused;
+		mate_male->restoreC2Language(male_language); mate_female->restoreC2Language(female_language);
 		mate_male_ref->moveTo(saved_speaker_x, saved_speaker_y, true);
 		mate_female_ref->moveTo(saved_listener_x, saved_listener_y, true);
 		mate_female_ref->range = saved_listener_range;

@@ -13,11 +13,20 @@ TEST(C2SpeechResources, ReadsVerifiedTablesAndRejectsTruncatedOrUnknownLayouts) 
 	for(unsigned i=0;i<72;++i) put(0xb2620+i*4,0x4b3000);
 	image[0xb3400]='x';
 	put(0x2020b,0x4b2220); put(0x209aa,0x4cd700);
+	put(0x21894,0x4b2204); put(0x21901,0x4b21f4);
+	image[0xb2604]=75; image[0xb25f4]=1;
 	for(unsigned i=0;i<18;++i) {image[0xcdb00+i*8]='x'; image[0xcdb04+i*8]='y';}
 	auto resources = readC2SpeechResources(image);
 	EXPECT_EQ(resources.babble[11][5],"x");
 	ASSERT_EQ(resources.pronunciation_rules.size(),18u);
 	EXPECT_EQ(resources.pronunciation_rules[17].second,"y");
+	EXPECT_EQ(resources.action_words[0],75);
+	EXPECT_EQ(resources.action_uses_noun[0],1);
+	image[0xb2604+15]=86;
+	EXPECT_THROW(readC2SpeechResources(image),Exception);
+	image[0xb2604+15]=0; image[0xb25f4]=2;
+	EXPECT_THROW(readC2SpeechResources(image),Exception);
+	image[0xb25f4]=1;
 	image[0x225c0]=0;
 	EXPECT_THROW(readC2SpeechResources(image),Exception);
 	image[0x225c0]=0x51;

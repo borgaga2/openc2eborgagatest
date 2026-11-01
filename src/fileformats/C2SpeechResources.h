@@ -8,6 +8,8 @@
 struct C2SpeechResources {
 	std::array<std::array<std::string, 6>, 12> babble;
 	std::vector<std::pair<std::string, std::string>> pronunciation_rules;
+	std::array<uint8_t, 16> action_words{};
+	std::array<uint8_t, 16> action_uses_noun{};
 };
 // Reads the verified Steam C2 executable layout; rejects unknown layouts.
 // Returned strings are UTF-8. The original executable remains a user asset.

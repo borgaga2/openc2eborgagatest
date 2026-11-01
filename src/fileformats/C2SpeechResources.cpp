@@ -32,7 +32,9 @@ C2SpeechResources readC2SpeechResources(std::span<const uint8_t> data) {
 	const std::array<uint8_t, 6> signature{0x51,0x56,0x8b,0x74,0x24,0x0c};
 	const auto code = address(0x4221c0, signature.size());
 	if (u32(address(0x41fe0b,4)) != 0x4b2220 ||
-		u32(address(0x4205aa,4)) != 0x4cd700) fail();
+		u32(address(0x4205aa,4)) != 0x4cd700 ||
+		u32(address(0x421494,4)) != 0x4b2204 ||
+		u32(address(0x421501,4)) != 0x4b21f4) fail();
 	if (!std::equal(signature.begin(),signature.end(),data.begin()+code)) fail();
 	auto text = [&](uint32_t va, size_t capacity) {
 		const auto p = address(va, capacity);
@@ -41,6 +43,12 @@ C2SpeechResources readC2SpeechResources(std::span<const uint8_t> data) {
 		return cp1252_to_utf8(std::string(reinterpret_cast<const char*>(data.data()+p), n));
 	};
 	C2SpeechResources result;
+	for (unsigned i = 0; i < 16; ++i) {
+		result.action_words[i] = data[address(0x4b2204 + i, 1)];
+		result.action_uses_noun[i] = data[address(0x4b21f4 + i, 1)];
+		if ((result.action_words[i] >= 86 && result.action_words[i] != 255) ||
+			result.action_uses_noun[i] > 1) fail();
+	}
 	for (unsigned row=0;row<12;++row) for (unsigned field=0;field<6;++field) {
 		const auto pointer = u32(address(0x4b2220+row*24+field*4,4));
 		result.babble[row][field] = text(pointer,25);
