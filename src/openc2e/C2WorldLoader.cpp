@@ -334,6 +334,8 @@ class C2WorldBridge {
 		if (engine.version != 2 || world.map->getMetaRoomCount() || !world.agents.empty())
 			throw Exception("C2 snapshot reconstruction requires an empty C2 world");
 		if (!saved.map || !saved.map->background) throw Exception("Missing saved C2 map");
+		if (saved.map->reserved[0] > 4 || saved.map->reserved[1] > 15)
+			throw Exception("Invalid saved C2 calendar");
 		validateWorldReferences(saved);
 		file.mapdata = make<MapData>();
 		file.mapdata->background = gallery(saved.map->background);
@@ -364,6 +366,11 @@ class C2WorldBridge {
 		file.scrollx = saved.script_state.scroll_x; file.scrolly = saved.script_state.scroll_y;
 		world.paused = true;
 		file.copyToWorld(); // attach suspended macros only after all agents exist
+		world.worldtickcount = saved.world_state.tick;
+		world.timeofday = saved.map->reserved[0];
+		world.dayofseason = saved.map->reserved[1] % 4;
+		world.season = saved.map->reserved[1] / 4;
+		world.year = saved.map->reserved[2];
 		std::map<const sfc::ObjectV2*, AgentRef> result;
 		for (const auto& [s, r] : objects) result.emplace(s, r->copiedAgent());
 		for (const auto& [s, a] : result) {

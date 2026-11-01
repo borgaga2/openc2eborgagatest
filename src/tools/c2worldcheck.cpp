@@ -63,6 +63,9 @@ int main(int argc, char** argv) {
 			!engine.initialSetup([&] { engine_ready = true; restored = loadC2WorldSnapshot(saved, assets); }))
 			throw Exception("Could not reconstruct saved C2 world");
 		if (!world.paused) throw Exception("Snapshot must stay paused until saved scripts are restored");
+		if (world.worldtickcount != saved.world_state.tick || world.timeofday != saved.map->reserved[0] ||
+			world.dayofseason != saved.map->reserved[1] % 4 || world.season != saved.map->reserved[1] / 4 || world.year != saved.map->reserved[2])
+			throw Exception("Lost saved C2 world clock or calendar");
 		size_t creatures = 0, links = 0, parts = 0, bubbles = 0;
 		auto check_entity = [&](Agent* agent, unsigned int id, const sfc::EntityV2& entity) {
 			auto* part = dynamic_cast<SpritePart*>(agent->part(id));
@@ -169,6 +172,16 @@ int main(int argc, char** argv) {
 			}
 			if (world.worldtickcount != tick_before + resume_ticks)
 				throw Exception("Resumed C2 world did not advance for every requested tick");
+			// Count calendar boundaries across a possible 32-bit tick rollover.
+			const uint64_t end_tick = uint64_t(tick_before) + resume_ticks;
+			const uint64_t boundaries = end_tick <= UINT32_MAX
+				? end_tick / 3600 - tick_before / 3600
+				: uint64_t(UINT32_MAX) / 3600 - tick_before / 3600 + 1 + uint32_t(end_tick) / 3600;
+			const uint64_t parts = saved.map->reserved[0] + boundaries;
+			const uint64_t days = saved.map->reserved[1] + parts / 5;
+			if (world.timeofday != parts % 5 || world.dayofseason != days % 4 ||
+				world.season != (days / 4) % 4 || world.year != uint32_t(saved.map->reserved[2] + days / 16))
+				throw Exception("Resumed C2 calendar did not advance from its saved phase");
 			for (const auto& [source, agent] : restored) {
 				const auto* saved_creature = dynamic_cast<const sfc::CreatureV2*>(source);
 				if (!saved_creature) continue;

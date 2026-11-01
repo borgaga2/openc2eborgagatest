@@ -86,6 +86,8 @@ struct RoomV2 : MFCObject {
 
 struct MapDataV2 : MFCObject {
 	uint32_t version = 1;
+	// Native map +0x0c/+0x10/+0x14: time of day (0..4), day in
+	// the year (0..15), and year. Retain the existing archive field name.
 	std::array<uint32_t, 3> reserved{};
 	std::shared_ptr<CGalleryV1> background;
 	// The archive's count excludes deleted (null) rooms, but its object stream

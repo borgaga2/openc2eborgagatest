@@ -67,6 +67,7 @@ void serialize_sections(MFCReader& ar, SpanReader& stream, const std::vector<uin
 	for (auto& script : file.scripts)
 		script.serialize(ar);
 	file.script_state.serialize(ar);
+	file.world_state.serialize(ar);
 }
 
 } // namespace
@@ -108,6 +109,7 @@ void write_c2_sfc_file(Writer& out, C2SFCFile& file) {
 	for (auto& script : file.scripts)
 		script.serialize(writer);
 	file.script_state.serialize(writer);
+	file.world_state.serialize(writer);
 	out.write(file.trailing_data);
 }
 

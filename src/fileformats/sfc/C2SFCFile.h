@@ -3,6 +3,7 @@
 #include "C2MapData.h"
 #include "C2ObjectData.h"
 #include "C2ScriptState.h"
+#include "C2WorldState.h"
 
 #include <filesystem>
 #include <memory>
@@ -14,7 +15,7 @@ class Writer;
 namespace sfc {
 
 // The sections understood by the C2 world archive reader. The bytes between
-// the map and object count, and after the running macro table, are retained
+// the map and object count, and after the world clock, are retained
 // verbatim until their meaning is known.
 struct C2SFCFile {
 	std::shared_ptr<MapDataV2> map;
@@ -23,6 +24,7 @@ struct C2SFCFile {
 	std::vector<std::shared_ptr<SceneryV2>> sceneries;
 	std::vector<ScriptV2> scripts;
 	ScriptStateV2 script_state;
+	WorldStateV2 world_state;
 	std::vector<uint8_t> trailing_data;
 };
 

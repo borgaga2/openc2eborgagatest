@@ -49,6 +49,18 @@ class C2WorldReferenceTest : public testing::Test {
 };
 }
 
+TEST_F(C2WorldReferenceTest, InvalidCalendarLeavesTheWorldUntouched) {
+	const auto tick = world.worldtickcount;
+	const auto time = world.timeofday, day = world.dayofseason, season = world.season, year = world.year;
+	saved.map->reserved[0] = 5;
+	rejects("Invalid saved C2 calendar");
+	saved.map->reserved[0] = 0; saved.map->reserved[1] = 16;
+	rejects("Invalid saved C2 calendar");
+	EXPECT_EQ(world.worldtickcount, tick);
+	EXPECT_EQ(world.timeofday, time); EXPECT_EQ(world.dayofseason, day);
+	EXPECT_EQ(world.season, season); EXPECT_EQ(world.year, year);
+}
+
 TEST_F(C2WorldReferenceTest, MissingObjectLinksAreRejectedBeforeConstruction) {
 	for (auto** link : {&first->object_pointer, &first->carrier, &saved.script_state.selected_creature}) {
 		*link = &outside;

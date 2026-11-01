@@ -19,6 +19,8 @@ does not write the input archive. The optional tick count is limited to 10,000.
 ## Restored state
 
 - Rooms, floors, doors, environmental values, camera position and selection.
+- Saved world tick and the map's independent calendar fields (time of day,
+  day within the year and year), preserving the next calendar transition.
 - Ordinary objects, call buttons and lifts, variables, object pointers, carried
   objects, saved timer countdowns and sprite animation positions.
 - Existing creature identities, composite body sprites, poses, vocabulary,
@@ -43,7 +45,7 @@ fail before changing the world. This does not provide complete rollback: errors
 during later construction or macro compilation can still leave partial state.
 
 Complete native history, pregnancy and genetic lifecycle references, remaining
-native world state, all macro execution modes, editable speech bubbles and
+opaque world state, all macro execution modes, editable speech bubbles and
 runtime snapshot capture still require work. Passing this checker is not proof
 that a world is fully playable or that a normal save/load cycle works.
 
