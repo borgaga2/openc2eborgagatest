@@ -22,7 +22,7 @@ static int check_c2_archive(const char* filename, C2Section section) {
 	if (section == C2Section::Macros) {
 		const auto active = std::count_if(archive.script_state.macros.begin(), archive.script_state.macros.end(), [](const auto& macro) { return macro != nullptr; });
 		fmt::print("C2 running scripts: {}, macro slots: {}, speech entries: {}\n", active, archive.script_state.macros.size(), archive.script_state.speech_history.size());
-		fmt::print("Remaining bytes after world clock: {}\n", archive.trailing_data.size());
+		fmt::print("Remaining bytes after world state: {}; archived monikers: {}\n", archive.trailing_data.size(), archive.world_state.archived_monikers.size());
 		fmt::print("C2 world clock: {}; calendar: time {}, day {}, year {}\n", archive.world_state.tick,
 			archive.map->reserved[0], archive.map->reserved[1], archive.map->reserved[2]);
 	}

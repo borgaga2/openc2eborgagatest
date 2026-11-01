@@ -34,6 +34,12 @@ room-entry events. Resuming a saved script does not run it again from its start.
 
 ## Validation and limitations
 
+The archive reader also retains the remaining native world records: up to
+sixteen archived monikers, the map geometry, twenty pairs of state values and
+the surrounding counters/flags. Their storage layout is decoded; unmapped
+values are preserved without inventing runtime behavior. Eden and the local
+current/backup worlds leave no undecoded trailing bytes and round-trip exactly.
+
 Before creating live rooms or agents, the loader checks object-reference
 membership, identity collisions, selection, carrier cycles, overlapping held
 objects, macro references and duplicate macro owners. Call-button-owned lift

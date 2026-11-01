@@ -61,6 +61,12 @@ TEST(C2SFCFile, ClockFollowsVariableLengthObjectListsAndMixedWidthStatistics) {
 	original.world_state.statistics = {101, 202, 303, 404};
 	original.world_state.statistics_words = {505, 65535};
 	original.world_state.tick = 0xf123abcdu;
+	original.world_state.archived_monikers = {"1ABC", "2DEF", "3GHI"};
+	original.world_state.state_before_map = {0x81234567, 7};
+	original.world_state.map_geometry = {144, 150, 58, 16};
+	for (unsigned i = 0; i < original.world_state.state_pairs.size(); ++i)
+		original.world_state.state_pairs[i] = {i * 2, 0xffffffffu - i};
+	original.world_state.state_after_pairs = {123, 456, 789, 5};
 	original.trailing_data = {0xab, 0xcd, 0xef};
 	VectorWriter bytes;
 	sfc::write_c2_sfc_file(bytes, original);
@@ -76,6 +82,11 @@ TEST(C2SFCFile, ClockFollowsVariableLengthObjectListsAndMixedWidthStatistics) {
 	EXPECT_EQ(decoded.world_state.statistics, original.world_state.statistics);
 	EXPECT_EQ(decoded.world_state.statistics_words, original.world_state.statistics_words);
 	EXPECT_EQ(decoded.world_state.tick, original.world_state.tick);
+	EXPECT_EQ(decoded.world_state.archived_monikers, original.world_state.archived_monikers);
+	EXPECT_EQ(decoded.world_state.state_before_map, original.world_state.state_before_map);
+	EXPECT_EQ(decoded.world_state.map_geometry, original.world_state.map_geometry);
+	EXPECT_EQ(decoded.world_state.state_pairs, original.world_state.state_pairs);
+	EXPECT_EQ(decoded.world_state.state_after_pairs, original.world_state.state_after_pairs);
 	EXPECT_EQ(decoded.map->reserved, original.map->reserved);
 	EXPECT_EQ(decoded.trailing_data, original.trailing_data);
 	VectorWriter round_trip;
@@ -83,7 +94,7 @@ TEST(C2SFCFile, ClockFollowsVariableLengthObjectListsAndMixedWidthStatistics) {
 	EXPECT_EQ(round_trip.vector(), bytes.vector());
 }
 
-TEST(C2SFCFile, TruncatedWorldClockIsRejected) {
+TEST(C2SFCFile, TruncatedWorldStateIsRejected) {
 	sfc::C2SFCFile original;
 	original.map = std::make_shared<sfc::MapDataV2>();
 	original.objects.push_back(std::make_shared<sfc::SimpleObjectV2>());
@@ -93,6 +104,30 @@ TEST(C2SFCFile, TruncatedWorldClockIsRejected) {
 	truncated.pop_back();
 	SpanReader input(truncated);
 	EXPECT_THROW(sfc::read_c2_sfc_file(input), Exception);
+}
+
+TEST(C2SFCFile, ExcessiveArchivedMonikerCountIsRejectedBeforeReadingItsRecords) {
+	// Empty reference lists, zero statistics and tick, then an invalid count.
+	std::array<uint32_t, 9> prefix{};
+	prefix.back() = 17;
+	VectorWriter bytes;
+	MFCWriter writer(bytes);
+	for (auto& value : prefix) writer(value);
+	SpanReader input(bytes.vector());
+	MFCReader reader(input);
+	sfc::WorldStateV2 decoded;
+	try {
+		decoded.serialize(reader);
+		FAIL() << "Accepted more monikers than the native world's sixteen slots";
+	} catch (const Exception& error) {
+		EXPECT_EQ(std::string(error.what()), "C2 world has too many archived monikers");
+	}
+	EXPECT_TRUE(decoded.archived_monikers.empty());
+	sfc::WorldStateV2 oversized;
+	oversized.archived_monikers.assign(17, "1ABC");
+	VectorWriter output;
+	MFCWriter invalid_writer(output);
+	EXPECT_THROW(oversized.serialize(invalid_writer), Exception);
 }
 
 TEST(C2SFCFile, RejectsArchiveWithoutC2ObjectSectionMarker) {

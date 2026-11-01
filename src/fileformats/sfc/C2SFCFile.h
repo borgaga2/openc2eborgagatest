@@ -15,7 +15,7 @@ class Writer;
 namespace sfc {
 
 // The sections understood by the C2 world archive reader. The bytes between
-// the map and object count, and after the world clock, are retained
+// the map and object count, and after the decoded world state, are retained
 // verbatim until their meaning is known.
 struct C2SFCFile {
 	std::shared_ptr<MapDataV2> map;
