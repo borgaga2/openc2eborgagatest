@@ -53,6 +53,7 @@ class Agent : public std::enable_shared_from_this<Agent> {
 	friend class LifeAssert;
 	friend class SFCObject;
 	friend class SFCFile;
+	friend class C2WorldBridge;
 	friend class SFCSimpleObject;
 	friend class SFCCompoundObject;
 	friend class SFCScenery;

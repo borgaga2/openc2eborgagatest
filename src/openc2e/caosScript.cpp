@@ -240,8 +240,9 @@ void caosScript::parse(Reader& in) {
 	return parse(readfile(in));
 }
 
-void caosScript::parse(const std::string& caostext) {
+void caosScript::parse(const std::string& caostext, bool retain_locations) {
 	assert(!tokens);
+	retain_source_locations = retain_locations;
 	// run the token parser
 	{
 		std::vector<caostoken> rawtokens;
@@ -249,12 +250,16 @@ void caosScript::parse(const std::string& caostext) {
 
 		tokens = std::shared_ptr<std::vector<caostoken> >(new std::vector<caostoken>());
 		size_t index = 0;
+		size_t source_offset = 0;
 		for (auto& t : rawtokens) {
+			const size_t token_offset = source_offset;
+			source_offset += t.data.size();
 			switch (t.type) {
 				case caostoken::TOK_WORD:
 					t.data = to_ascii_lowercase(t.data);
 					t.index = index++;
 					tokens->push_back(t);
+					if (retain_source_locations) source_offsets.push_back(token_offset);
 					break;
 				case caostoken::TOK_BYTESTR:
 				case caostoken::TOK_STRING:
@@ -266,6 +271,7 @@ void caosScript::parse(const std::string& caostext) {
 				case caostoken::TOK_ERROR:
 					t.index = index++;
 					tokens->push_back(t);
+					if (retain_source_locations) source_offsets.push_back(token_offset);
 					break;
 				case caostoken::TOK_COMMENT:
 				case caostoken::TOK_WHITESPACE:
@@ -583,6 +589,8 @@ void caosScript::parseloop(int state, void* info) {
 		if (logicalType(t) != TOK_WORD) {
 			throw parseException("Unexpected non-word token");
 		}
+		if (retain_source_locations)
+			current->source_commands.emplace(source_offsets.at(t->index), script::SourceCommand{current->getNextIndex(), t->word()});
 		if (t->word() == "scrp") {
 			if (state != ST_INSTALLER && state != ST_BODY && state != ST_REMOVAL)
 				throw parseException("Unexpected SCRP");
@@ -688,11 +696,16 @@ void caosScript::parseloop(int state, void* info) {
 			t = getToken(TOK_WORD);
 			std::string label = t->word();
 			emitOp(CAOS_GSUB, current->getLabel(label));
+			if (retain_source_locations && tokenPeek())
+				current->source_gsub_returns.emplace(source_offsets.at(tokenPeek()->index), current->getNextIndex());
 
 		} else if (t->word() == "loop") {
 			int loop = current->getNextIndex();
 			emitCmd("cmd loop");
+			const size_t body_offset = retain_source_locations && tokenPeek() ? source_offsets.at(tokenPeek()->index) : 0;
 			parseloop(ST_LOOP, (void*)&loop);
+			if (retain_source_locations)
+				current->source_loop_bodies.emplace(body_offset, source_offsets.at(errindex));
 		} else if (t->word() == "untl") {
 			if (state != ST_LOOP)
 				throw parseException("Unexpected UNTL");
@@ -720,7 +733,10 @@ void caosScript::parseloop(int state, void* info) {
 			emitOp(CAOS_YIELD, 0);
 			emitOp(CAOS_JMP, ri.jnzreloc);
 			ri.loopidx = current->getNextIndex();
+			const size_t body_offset = retain_source_locations && tokenPeek() ? source_offsets.at(tokenPeek()->index) : 0;
 			parseloop(ST_REPS, (void*)&ri);
+			if (retain_source_locations)
+				current->source_reps_bodies.emplace(body_offset, source_offsets.at(errindex));
 		} else if (t->word() == "repe") {
 			if (state != ST_REPS)
 				throw parseException("Unexpected repe");

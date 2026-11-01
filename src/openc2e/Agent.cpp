@@ -1192,6 +1192,7 @@ void Agent::tick() {
 }
 
 void Agent::unhandledException(std::string info, bool wasscript) {
+	++world.runtime_error_count;
 	// TODO: do something with this? empty the stack?
 	if (world.autostop) {
 		// autostop is mostly for Creatures Village, which is full of buggy scripts
@@ -1319,6 +1320,8 @@ unsigned int Agent::getZOrder() const {
 		return v->getZOrder() + v->cabinplane;
 		// TODO: Vehicle should probably rearrange zorder of passengers if ever moved
 	} else if (carriedby) {
+		if (engine.version == 2)
+			return carriedby->getZOrder() + 1;
 		// TODO: check for overflow
 		// TODO: is adding our own zorder here correct behaviour? someone should check
 		if (engine.version > 1)

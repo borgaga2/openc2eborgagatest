@@ -84,6 +84,8 @@ class World {
 	unsigned int worldtickcount;
 	unsigned int timeofday, dayofseason, season, year;
 	bool showrooms, autokill, autostop;
+	// Monotonic diagnostic count, including errors handled by autostop/autokill.
+	uint64_t runtime_error_count = 0;
 
 	std::vector<unsigned int> groundlevels;
 

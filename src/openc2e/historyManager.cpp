@@ -211,6 +211,14 @@ bool historyManager::hasMoniker(std::string s) {
 		return true;
 }
 
+monikerData& historyManager::restoreMoniker(const std::string& name, std::shared_ptr<genomeFile> genome) {
+	if (name.empty() || !genome || hasMoniker(name))
+		throw Exception("Cannot restore an empty or duplicate moniker");
+	monikerData restored;
+	restored.init(name, std::move(genome));
+	return monikers.emplace(name, std::move(restored)).first->second;
+}
+
 monikerData& historyManager::getMoniker(std::string s) {
 	std::map<std::string, monikerData>::iterator i = monikers.find(s);
 	if (i == monikers.end())

@@ -86,6 +86,7 @@ class historyManager {
 
   public:
 	std::string newMoniker(std::shared_ptr<genomeFile>);
+	monikerData& restoreMoniker(const std::string&, std::shared_ptr<genomeFile>);
 	bool hasMoniker(std::string);
 	monikerData& getMoniker(std::string);
 	std::string findMoniker(std::shared_ptr<genomeFile>);

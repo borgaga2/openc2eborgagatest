@@ -21,6 +21,7 @@
 #define _ENGINE_H
 
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <stdint.h>
@@ -107,7 +108,7 @@ class Engine {
 	void addPossibleAudioBackend(std::string, AudioBackend*);
 
 	bool parseCommandLine(int argc, char* argv[]);
-	bool initialSetup();
+	bool initialSetup(const std::function<void()>& bootstrap_override = {});
 	void shutdown();
 
 	bool noRun() { return cmdline_norun; }

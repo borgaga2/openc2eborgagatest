@@ -51,6 +51,7 @@ struct SFCScript {
 };
 
 class SFCFile {
+    friend class C2WorldBridge;
   private:
 	unsigned int ver = 0;
 
@@ -61,6 +62,7 @@ class SFCFile {
 
   public:
 	MapData* mapdata = nullptr;
+	bool restoring_snapshot = false;
 	std::vector<SFCObject*> objects;
 	std::vector<SFCScenery*> scenery;
 	std::vector<SFCScript> scripts;

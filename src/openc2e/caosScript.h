@@ -83,6 +83,13 @@ class script {
 	// a normalized copy of the script source. this is used for error tracing
 	std::string code;
 	std::shared_ptr<std::vector<toktrace> > tokinfo;
+	// Optional original-source locations, used when importing suspended C2
+	// scripts. These point before argument evaluation, not just at CAOS_CMD.
+	struct SourceCommand { int instruction; std::string name; };
+	std::map<size_t, SourceCommand> source_commands;
+	std::map<size_t, int> source_gsub_returns;
+	std::map<size_t, size_t> source_loop_bodies;
+	std::map<size_t, size_t> source_reps_bodies;
 
   public:
 	int fmly, gnus, spcs, scrp;
@@ -215,7 +222,7 @@ class caosScript { //: Collectable {
 
 	caosScript(const std::string& dialect, const std::filesystem::path& filename);
 	caosScript() { d = NULL; }
-	void parse(const std::string& caostext);
+	void parse(const std::string& caostext, bool retain_source_locations = false);
 	void parse(Reader& in);
 	~caosScript();
 	void installScripts();
@@ -251,6 +258,8 @@ class caosScript { //: Collectable {
 	int errindex; // index to the token to report parse errors on
 	int traceindex; // index to the token to report runtime errors on
 	int enumdepth;
+	bool retain_source_locations = false;
+	std::vector<size_t> source_offsets;
 	// deprecated support functions
 	caostoken* tokenPeek();
 	void putBackToken(caostoken*);

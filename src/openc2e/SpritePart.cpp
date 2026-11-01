@@ -64,7 +64,7 @@ void SpritePart::partRender(RenderTarget* renderer, int xoffset, int yoffset) {
 }
 
 void SpritePart::setFrameNo(unsigned int f) {
-	assert(f < animation.size());
+	assert(f <= animation.size()); // size() is the completed-animation cursor.
 	frameno = f;
 }
 

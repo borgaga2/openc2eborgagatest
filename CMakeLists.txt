@@ -350,6 +350,8 @@ add_library(openc2e_core OBJECT
 	src/openc2e/Room.cpp
 	src/openc2e/Scriptorium.cpp
 	src/openc2e/SFCFile.cpp
+	src/openc2e/C2WorldLoader.cpp
+	src/openc2e/C2MacroState.cpp
 	src/openc2e/C2Hearing.cpp
 	src/openc2e/SimpleAgent.cpp
 	src/openc2e/creatures/SkeletalCreature.cpp
@@ -403,9 +405,11 @@ add_executable(test_openc2e
 	src/openc2e/tests/C2BiochemistryStateTest.cpp
 	src/openc2e/tests/C2PhysiologyStateTest.cpp
 	src/openc2e/tests/C2SkeletonStateTest.cpp
+	src/openc2e/tests/C2WorldLoaderTest.cpp
 	src/openc2e/tests/C2HearingTest.cpp
 	src/openc2e/tests/C2LanguageTest.cpp
 	src/openc2e/tests/EngineTextInputTest.cpp
+	src/openc2e/tests/C2MacroStateTest.cpp
 	src/openc2e/tests/C2InstinctTest.cpp
 )
 target_include_directories(test_openc2e PRIVATE src/openc2e)
@@ -480,6 +484,10 @@ target_link_libraries(test_opencreatures1 opencreatures1_core gtest_main)
 add_executable(c2playcheck src/tools/c2playcheck.cpp)
 target_include_directories(c2playcheck PRIVATE src/openc2e)
 target_link_libraries(c2playcheck openc2e_core openc2e_sdlbackend)
+
+add_executable(c2worldcheck src/tools/c2worldcheck.cpp)
+target_include_directories(c2worldcheck PRIVATE src/openc2e)
+target_link_libraries(c2worldcheck openc2e_core openc2e_sdlbackend)
 
 add_executable(attparser src/tools/attparser.cpp)
 target_link_libraries(attparser openc2e-fileformats)

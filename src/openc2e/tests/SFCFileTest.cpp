@@ -1,9 +1,11 @@
 #include "openc2e/SFCFile.h"
-#include "openc2e/Agent.h"
-#include "openc2e/Engine.h"
 #include "common/Exception.h"
-#include <algorithm>
-#include <memory>
+#include "openc2e/Agent.h"
+#include "openc2e/DullPart.h"
+#include "openc2e/Engine.h"
+#include "openc2e/World.h"
+#include "openc2e/imageManager.h"
+#include "common/creaturesImage.h"
 
 #include "common/endianlove.h"
 #include "common/io/SpanReader.h"
@@ -11,6 +13,63 @@
 
 #include <array>
 #include <gtest/gtest.h>
+
+void copyEntityData(SFCEntity*, DullPart*);
+
+TEST(SFCFile, C2EntityRetainsNextAnimationCursorIncludingRepeatAndCompletion) {
+	class TestImageManager : public imageManager {
+	  public:
+		using imageManager::addImage;
+	};
+	struct Environment {
+		int version = engine.version;
+		std::string gametype = engine.gametype;
+		std::unique_ptr<imageManager> gallery = std::move(world.gallery);
+		Environment() { engine.version = 2; engine.gametype = "c2"; world.gallery = std::make_unique<TestImageManager>(); }
+		~Environment() {
+			delete static_cast<TestImageManager*>(world.gallery.release());
+			world.gallery = std::move(gallery);
+			engine.version = version;
+			engine.gametype = gametype;
+		}
+	} environment;
+	class PlainAgent : public Agent {
+	  public:
+		PlainAgent() : Agent(2, 1, 1, 1000) {}
+		CompoundPart* part(unsigned int) override { return nullptr; }
+	} agent;
+	auto image = std::make_shared<creaturesImage>("animation-test");
+	image->images.resize(10);
+	for (auto& frame : image->images) {
+		frame.width = frame.height = 1;
+		frame.format = if_rgb565;
+		frame.data = shared_array<uint8_t>(2);
+	}
+	static_cast<TestImageManager*>(world.gallery.get())->addImage(image);
+	SFCFile archive;
+	archive.setVersion(1);
+	SFCEntity entity(&archive);
+	entity.currframe = 7;
+	entity.imgoffset = 0;
+	entity.haveanim = true;
+	entity.animframe = 8;
+	for (const std::string sequence : {"01234567", "01234567R"}) {
+		DullPart part(&agent, 0, "animation-test", 0, 0, 0, 0);
+		entity.animstring = sequence;
+		copyEntityData(&entity, &part);
+		EXPECT_EQ(part.getCurrentSprite(), 7u);
+		EXPECT_EQ(part.getFrameNo(), 8u);
+		EXPECT_EQ(part.animation.size(), sequence.size());
+		part.tick();
+		EXPECT_EQ(part.getCurrentSprite(), sequence.back() == 'R' ? 0u : 7u);
+	}
+	entity.animstring.clear();
+	entity.animframe = 0;
+	DullPart empty(&agent, 0, "animation-test", 0, 0, 0, 0);
+	copyEntityData(&entity, &empty);
+	EXPECT_TRUE(empty.animation.empty());
+	EXPECT_EQ(empty.getFrameNo(), 0u);
+}
 
 TEST(SFCFile, C2RoomPreservesSignedEnvironmentSources) {
 	VectorWriter out;

@@ -1053,7 +1053,7 @@ bool Engine::parseCommandLine(int argc, char* argv[]) {
 	return true;
 }
 
-bool Engine::initialSetup() {
+bool Engine::initialSetup(const std::function<void()>& bootstrap_override) {
 	assert(data_directories.size() > 0);
 
 	// finally, add our cache directory to the end
@@ -1151,7 +1151,9 @@ bool Engine::initialSetup() {
 
 	// execute the initial scripts!
 	fmt::print("* Executing initial scripts...\n");
-	if (cmdline_bootstrap.size() == 0) {
+	if (bootstrap_override) {
+		bootstrap_override();
+	} else if (cmdline_bootstrap.size() == 0) {
 		world.executeBootstrap(false);
 	} else {
 		std::vector<std::string> scripts;

@@ -807,6 +807,10 @@ void SFCScript::read(SFCFile* f) {
 void SFCFile::copyToWorld() {
 	// add the map data
 	mapdata->copyToWorld();
+	// Saved floating agents already have world coordinates. Moving the camera
+	// after registering them would apply its saved offset a second time.
+	if (restoring_snapshot)
+		engine.camera->moveTo(scrollx, scrolly, jump);
 
 	// install scripts
 	for (auto& script : scripts) {
@@ -829,7 +833,8 @@ void SFCFile::copyToWorld() {
 	}
 
 	// move the camera to the correct position
-	engine.camera->moveTo(scrollx, scrolly, jump);
+	if (!restoring_snapshot)
+		engine.camera->moveTo(scrollx, scrolly, jump);
 
 	// patch agents
 	// TODO: do we really need to do this, and if so, should it be done here?
@@ -960,8 +965,12 @@ void copyEntityData(SFCEntity* entity, DullPart* p) {
 			}
 		}
 
-		// TODO: should make sure animation position == current pose
-		if (entity->animframe < p->animation.size()) {
+		if (entity->getParent()->version() == 1) {
+			// C2 stores the next animation character, including the repeat
+			// marker or the position just past a completed sequence.
+			sfccheck(entity->animframe <= p->animation.size());
+			p->setFrameNo(entity->animframe);
+		} else if (entity->animframe < p->animation.size()) {
 			if (p->animation[entity->animframe] == 255)
 				p->setFrameNo(0);
 			else
@@ -986,7 +995,7 @@ void SFCCompoundObject::copyToWorld() {
 	CompoundAgent* a = ourAgent;
 	a->finishInit();
 	a->moveTo(parts[0]->x, parts[0]->y);
-	a->queueScript(7); // enter scope
+	if (!parent->restoring_snapshot) a->queueScript(7); // enter scope
 
 	if (parent->version() == 1)
 		world.setUNID(a, unid);
@@ -1024,6 +1033,8 @@ void SFCCompoundObject::copyToWorld() {
 		if (e->zorder < basezorder)
 			basezorder = e->zorder;
 	}
+	if (parent->version() == 1)
+		a->setZOrder(basezorder);
 
 	for (unsigned int i = 0; i < parts.size(); i++) {
 		SFCEntity* e = parts[i];
@@ -1056,7 +1067,7 @@ void SFCSimpleObject::copyToWorld() {
 	a->finishInit();
 	//a->moveTo(entity->x - (a->part(0)->getWidth() / 2), entity->y - (a->part(0) -> getHeight() / 2));
 	a->moveTo(entity->x, entity->y);
-	a->queueScript(7); // enter scope
+	if (!parent->restoring_snapshot) a->queueScript(7); // enter scope
 
 	if (parent->version() == 1)
 		world.setUNID(a, unid);
@@ -1205,7 +1216,7 @@ void SFCScenery::copyToWorld() {
 	a->finishInit();
 	//a->moveTo(entity->x - (a->part(0)->getWidth() / 2), entity->y - (a->part(0) -> getHeight() / 2));
 	a->moveTo(entity->x, entity->y);
-	a->queueScript(7); // enter scope
+	if (!parent->restoring_snapshot) a->queueScript(7); // enter scope
 
 	if (parent->version() == 1)
 		world.setUNID(a, unid);
